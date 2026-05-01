@@ -82,7 +82,7 @@ async function run() {
     const mountRoot = document.createElement("div")
     mountRoot.style.cssText = "position:relative;height:720px;border:1px solid #334155;border-radius:8px;overflow:hidden"
     outputEl.appendChild(mountRoot)
-    await mount(mountRoot, host, browserModuleApi(host))
+    await mount(mountRoot, host, await browserModuleApi(host, settings))
   } else {
     status("Instantiating renderer")
     const result = await instantiateDashboardWasm(rendererBytes, host, frames)
@@ -92,9 +92,10 @@ async function run() {
   status("Renderer completed")
 }
 
-function browserModuleApi(host) {
+async function browserModuleApi(host, settings) {
   const capabilities = new Set(Array.isArray(host?.package?.capabilities) ? host.package.capabilities : [])
   const frames = Array.isArray(host?.package?.frames) ? host.package.frames : []
+  const libraries = await loadBrowserModuleLibraries()
   const capabilityAllowed = (capability) => capabilities.has(String(capability || ""))
   const resolveFrame = (idOrFrame) => {
     if (idOrFrame && typeof idOrFrame === "object") return idOrFrame
@@ -124,11 +125,49 @@ function browserModuleApi(host) {
         throw new Error("Arrow table decoding is provided by the ServiceRadar web host")
       },
     },
-    mapbox: () => ({}),
-    libraries: {},
+    mapbox: () => ({
+      enabled: Boolean(mapboxAccessToken(settings)),
+      access_token: mapboxAccessToken(settings),
+      style_dark: settings?.mapbox?.style_dark || settings?.mapbox_style_dark,
+      style_light: settings?.mapbox?.style_light || settings?.mapbox_style_light,
+    }),
+    libraries,
     onThemeChange: () => () => {},
     onFrameUpdate: () => () => {},
   }
+}
+
+async function loadBrowserModuleLibraries() {
+  ensureStylesheet("https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.css")
+
+  const [mapboxModule, deckLayers, deckMapbox] = await Promise.all([
+    import("https://esm.sh/mapbox-gl@3.10.0"),
+    import("https://esm.sh/@deck.gl/layers@9.3.2?bundle"),
+    import("https://esm.sh/@deck.gl/mapbox@9.3.2?bundle"),
+  ])
+
+  return {
+    mapboxgl: mapboxModule.default || mapboxModule,
+    MapboxOverlay: deckMapbox.MapboxOverlay,
+    ScatterplotLayer: deckLayers.ScatterplotLayer,
+    TextLayer: deckLayers.TextLayer,
+  }
+}
+
+function ensureStylesheet(href) {
+  if (document.querySelector(`link[href="${href}"]`)) return
+  const link = document.createElement("link")
+  link.rel = "stylesheet"
+  link.href = href
+  document.head.appendChild(link)
+}
+
+function mapboxAccessToken(settings) {
+  return (
+    settings?.mapbox?.access_token ||
+    settings?.mapbox_access_token ||
+    ""
+  )
 }
 
 async function instantiateDashboardWasm(bytes, host, frames) {
