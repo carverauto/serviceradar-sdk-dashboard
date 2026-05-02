@@ -1,0 +1,26 @@
+{
+  "name": "@serviceradar/dashboard-sdk",
+  "version": "0.1.0",
+  "description": "ServiceRadar dashboard package SDK for browser module and WASM renderers.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./react": "./src/react.js",
+    "./srql": "./src/srql.js"
+  },
+  "files": [
+    "src",
+    "srdashboard",
+    "tools"
+  ],
+  "peerDependencies": {
+    "react": ">=19.2.5",
+    "react-dom": ">=19.2.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.4",
+    "vite": "^7.1.12",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
+  }
+}

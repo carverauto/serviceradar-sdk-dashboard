@@ -58,6 +58,45 @@ Their manifest renderer must declare:
 
 This is an admin-approved extension model, not untrusted script execution.
 
+## React Dashboard SDK
+
+React is the preferred authoring path for browser-module dashboards. The SDK
+exports a small React surface that mirrors the existing web-ng React hook pattern
+used by the Zen rules editor: mount with `createRoot`, keep Phoenix/web-ng as
+the host shell, and pass all data/theme/navigation through a bounded host API.
+
+```jsx
+import React from "react"
+import {
+  mountReactDashboard,
+  useDashboardFrame,
+  useDashboardSrql,
+  useDashboardTheme,
+} from "@serviceradar/dashboard-sdk/react"
+
+function NetworkMap() {
+  const sites = useDashboardFrame("sites")
+  const srql = useDashboardSrql()
+  const theme = useDashboardTheme()
+
+  return (
+    <button onClick={() => srql.update(srql.build({
+      entity: "wifi_sites",
+      include: {site_code: ["DEN"]},
+      limit: 500,
+    }))}>
+      {theme}: {sites?.results?.length || 0} sites
+    </button>
+  )
+}
+
+export const mountDashboard = mountReactDashboard(NetworkMap)
+```
+
+The build output is still a standalone `renderer.js` artifact. Customer authors
+can iterate against the local harness with sample frames/settings and then ship
+the same artifact through ServiceRadar package import.
+
 Trusted browser modules can render deck.gl maps directly because the host passes
 the map/deck constructors through `api.libraries`:
 
@@ -116,6 +155,34 @@ const table = await api.arrow.table("sites")
 If the active SRQL backend cannot emit Arrow for that query, ServiceRadar falls
 back to `json_rows` with the same frame id so packages can stay compatible.
 
+Browser modules also receive first-class SRQL helpers through `api.srql`.
+Package authors should use these helpers when map/sidebar interactions need to
+change the server-side query that hydrates the dashboard:
+
+```js
+const current = api.srql.query("sites")
+const next = api.srql.build({
+  entity: "wifi_sites",
+  search: "ORD",
+  searchField: "site_code",
+  exclude: {
+    region: ["AM-East"],
+    ap_family: ["2xx", "3xx"],
+  },
+  where: ["down_count:>0"],
+  limit: 500,
+})
+
+api.srql.update(next)
+```
+
+`api.srql.update(query, frameQueries)` asks ServiceRadar to push a LiveView
+patch, rerun the approved dashboard data frames through SRQL, and remount the
+renderer with fresh server-filtered rows. The optional `frameQueries` object can
+override individual frame IDs when a dashboard needs detail frames to use a
+different SRQL query from the primary map frame. The old `api.setSrqlQuery`
+alias remains for compatibility, but new packages should prefer `api.srql`.
+
 WASM dashboard renderers use the same frame contract through raw data-provider
 imports:
 
@@ -135,6 +202,23 @@ if srdashboard.DataFrameEncoding(0) == srdashboard.FrameEncodingArrowIPC {
     // Hand payload to the renderer's Arrow/table pipeline.
   }
 }
+```
+
+Go renderers and build tooling can use `srdashboard.BuildSRQL` for deterministic
+query construction:
+
+```go
+query := srdashboard.BuildSRQL(srdashboard.SRQLQuery{
+	Entity:      "wifi_sites",
+	SearchField: "site_code",
+	Search:      "ORD",
+	Exclude: map[string][]string{
+		"region":    {"AM-East"},
+		"ap_family": {"2xx", "3xx"},
+	},
+	Where: []string{"down_count:>0"},
+	Limit: 500,
+})
 ```
 
 If a WASM renderer needs to recompute its render model when live frames arrive,

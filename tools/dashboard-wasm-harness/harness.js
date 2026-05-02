@@ -101,6 +101,23 @@ async function browserModuleApi(host, settings) {
     if (idOrFrame && typeof idOrFrame === "object") return idOrFrame
     return frames.find((frame) => String(frame.id) === String(idOrFrame))
   }
+  const srql = createSrqlApi({
+    frames,
+    pushQuery: (query, frameQueries = {}) => {
+      const text = String(query || "")
+      const overrides = Object.fromEntries(
+        Object.entries(frameQueries || {}).map(([id, value]) => [String(id), String(value || "")]),
+      )
+
+      if (frames[0]) frames[0].query = text
+      for (const frame of frames) {
+        if (overrides[frame.id]) frame.query = overrides[frame.id]
+      }
+
+      status(`SRQL update requested: ${text}`)
+      console.info("ServiceRadar dashboard SRQL update requested", {query: text, frameQueries: overrides})
+    },
+  })
 
   return {
     version: "dashboard-browser-module-host-v1",
@@ -112,6 +129,8 @@ async function browserModuleApi(host, settings) {
     isDarkMode: () => Boolean(window.matchMedia?.("(prefers-color-scheme: dark)")?.matches),
     frames: () => frames,
     frame: (id) => resolveFrame(id),
+    srql,
+    setSrqlQuery: srql.update,
     arrow: {
       frameBytes: (idOrFrame) => {
         const frame = resolveFrame(idOrFrame)
@@ -135,6 +154,64 @@ async function browserModuleApi(host, settings) {
     onThemeChange: () => () => {},
     onFrameUpdate: () => () => {},
   }
+}
+
+function createSrqlApi({frames, pushQuery}) {
+  const currentQuery = (frameId = "sites") => {
+    const preferred = frames.find((frame) => String(frame?.id || "") === String(frameId || ""))
+    return preferred?.query || frames[0]?.query || ""
+  }
+  const update = (query, frameQueries = {}) => pushQuery(query, frameQueries)
+
+  return Object.assign(() => ({query: currentQuery()}), {
+    query: currentQuery,
+    update,
+    updateQuery: update,
+    setQuery: update,
+    escapeValue: srqlValue,
+    list: (values) => `(${Array.from(values || []).map(srqlValue).join(",")})`,
+    build: buildSrqlQuery,
+  })
+}
+
+function buildSrqlQuery(options = {}) {
+  const entity = String(options.entity || "devices").trim()
+  const tokens = [`in:${entity || "devices"}`]
+  const search = String(options.search || "").trim()
+  const searchField = String(options.searchField || "").trim()
+
+  if (search && searchField) tokens.push(`${searchField}:%${srqlValue(search)}%`)
+  appendSrqlFilters(tokens, options.include)
+
+  for (const [field, values] of Object.entries(options.exclude || {})) {
+    const list = Array.from(values || []).filter(Boolean)
+    if (field && list.length > 0) tokens.push(`!${field}:${apiSrqlList(list)}`)
+  }
+
+  for (const clause of Array.from(options.where || [])) {
+    const text = String(clause || "").trim()
+    if (text) tokens.push(text)
+  }
+
+  const limit = Number(options.limit)
+  if (Number.isInteger(limit) && limit > 0) tokens.push(`limit:${limit}`)
+
+  return tokens.join(" ")
+}
+
+function appendSrqlFilters(tokens, filters) {
+  for (const [field, values] of Object.entries(filters || {})) {
+    const list = Array.from(values || []).filter(Boolean)
+    if (field && list.length > 0) tokens.push(`${field}:${apiSrqlList(list)}`)
+  }
+}
+
+function apiSrqlList(values) {
+  return `(${Array.from(values || []).map(srqlValue).join(",")})`
+}
+
+function srqlValue(value) {
+  return String(value || "").trim().replace(/\s+/g, "\\ ")
 }
 
 async function loadBrowserModuleLibraries() {
