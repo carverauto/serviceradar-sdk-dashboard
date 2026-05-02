@@ -82,7 +82,7 @@ async function run() {
     const mountRoot = document.createElement("div")
     mountRoot.style.cssText = "position:relative;height:720px;border:1px solid #334155;border-radius:8px;overflow:hidden"
     outputEl.appendChild(mountRoot)
-    await mount(mountRoot, host, browserModuleApi(host))
+    await mount(mountRoot, host, await browserModuleApi(host, settings))
   } else {
     status("Instantiating renderer")
     const result = await instantiateDashboardWasm(rendererBytes, host, frames)
@@ -92,14 +92,32 @@ async function run() {
   status("Renderer completed")
 }
 
-function browserModuleApi(host) {
+async function browserModuleApi(host, settings) {
   const capabilities = new Set(Array.isArray(host?.package?.capabilities) ? host.package.capabilities : [])
   const frames = Array.isArray(host?.package?.frames) ? host.package.frames : []
+  const libraries = await loadBrowserModuleLibraries()
   const capabilityAllowed = (capability) => capabilities.has(String(capability || ""))
   const resolveFrame = (idOrFrame) => {
     if (idOrFrame && typeof idOrFrame === "object") return idOrFrame
     return frames.find((frame) => String(frame.id) === String(idOrFrame))
   }
+  const srql = createSrqlApi({
+    frames,
+    pushQuery: (query, frameQueries = {}) => {
+      const text = String(query || "")
+      const overrides = Object.fromEntries(
+        Object.entries(frameQueries || {}).map(([id, value]) => [String(id), String(value || "")]),
+      )
+
+      if (frames[0]) frames[0].query = text
+      for (const frame of frames) {
+        if (overrides[frame.id]) frame.query = overrides[frame.id]
+      }
+
+      status(`SRQL update requested: ${text}`)
+      console.info("ServiceRadar dashboard SRQL update requested", {query: text, frameQueries: overrides})
+    },
+  })
 
   return {
     version: "dashboard-browser-module-host-v1",
@@ -111,6 +129,8 @@ function browserModuleApi(host) {
     isDarkMode: () => Boolean(window.matchMedia?.("(prefers-color-scheme: dark)")?.matches),
     frames: () => frames,
     frame: (id) => resolveFrame(id),
+    srql,
+    setSrqlQuery: srql.update,
     arrow: {
       frameBytes: (idOrFrame) => {
         const frame = resolveFrame(idOrFrame)
@@ -124,11 +144,107 @@ function browserModuleApi(host) {
         throw new Error("Arrow table decoding is provided by the ServiceRadar web host")
       },
     },
-    mapbox: () => ({}),
-    libraries: {},
+    mapbox: () => ({
+      enabled: Boolean(mapboxAccessToken(settings)),
+      access_token: mapboxAccessToken(settings),
+      style_dark: settings?.mapbox?.style_dark || settings?.mapbox_style_dark,
+      style_light: settings?.mapbox?.style_light || settings?.mapbox_style_light,
+    }),
+    libraries,
     onThemeChange: () => () => {},
     onFrameUpdate: () => () => {},
   }
+}
+
+function createSrqlApi({frames, pushQuery}) {
+  const currentQuery = (frameId = "sites") => {
+    const preferred = frames.find((frame) => String(frame?.id || "") === String(frameId || ""))
+    return preferred?.query || frames[0]?.query || ""
+  }
+  const update = (query, frameQueries = {}) => pushQuery(query, frameQueries)
+
+  return Object.assign(() => ({query: currentQuery()}), {
+    query: currentQuery,
+    update,
+    updateQuery: update,
+    setQuery: update,
+    escapeValue: srqlValue,
+    list: (values) => `(${Array.from(values || []).map(srqlValue).join(",")})`,
+    build: buildSrqlQuery,
+  })
+}
+
+function buildSrqlQuery(options = {}) {
+  const entity = String(options.entity || "devices").trim()
+  const tokens = [`in:${entity || "devices"}`]
+  const search = String(options.search || "").trim()
+  const searchField = String(options.searchField || "").trim()
+
+  if (search && searchField) tokens.push(`${searchField}:%${srqlValue(search)}%`)
+  appendSrqlFilters(tokens, options.include)
+
+  for (const [field, values] of Object.entries(options.exclude || {})) {
+    const list = Array.from(values || []).filter(Boolean)
+    if (field && list.length > 0) tokens.push(`!${field}:${apiSrqlList(list)}`)
+  }
+
+  for (const clause of Array.from(options.where || [])) {
+    const text = String(clause || "").trim()
+    if (text) tokens.push(text)
+  }
+
+  const limit = Number(options.limit)
+  if (Number.isInteger(limit) && limit > 0) tokens.push(`limit:${limit}`)
+
+  return tokens.join(" ")
+}
+
+function appendSrqlFilters(tokens, filters) {
+  for (const [field, values] of Object.entries(filters || {})) {
+    const list = Array.from(values || []).filter(Boolean)
+    if (field && list.length > 0) tokens.push(`${field}:${apiSrqlList(list)}`)
+  }
+}
+
+function apiSrqlList(values) {
+  return `(${Array.from(values || []).map(srqlValue).join(",")})`
+}
+
+function srqlValue(value) {
+  return String(value || "").trim().replace(/\s+/g, "\\ ")
+}
+
+async function loadBrowserModuleLibraries() {
+  ensureStylesheet("https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.css")
+
+  const [mapboxModule, deckLayers, deckMapbox] = await Promise.all([
+    import("https://esm.sh/mapbox-gl@3.10.0"),
+    import("https://esm.sh/@deck.gl/layers@9.3.2?bundle"),
+    import("https://esm.sh/@deck.gl/mapbox@9.3.2?bundle"),
+  ])
+
+  return {
+    mapboxgl: mapboxModule.default || mapboxModule,
+    MapboxOverlay: deckMapbox.MapboxOverlay,
+    ScatterplotLayer: deckLayers.ScatterplotLayer,
+    TextLayer: deckLayers.TextLayer,
+  }
+}
+
+function ensureStylesheet(href) {
+  if (document.querySelector(`link[href="${href}"]`)) return
+  const link = document.createElement("link")
+  link.rel = "stylesheet"
+  link.href = href
+  document.head.appendChild(link)
+}
+
+function mapboxAccessToken(settings) {
+  return (
+    settings?.mapbox?.access_token ||
+    settings?.mapbox_access_token ||
+    ""
+  )
 }
 
 async function instantiateDashboardWasm(bytes, host, frames) {

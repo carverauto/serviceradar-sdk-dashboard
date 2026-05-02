@@ -1,10 +1,21 @@
-# Dashboard WASM Harness
+# Dashboard Package Harness
 
 This is a local development harness for customer-owned ServiceRadar dashboard
 packages. It loads a package manifest, renderer WASM, optional settings, and
 sample SRQL frames without deploying the package into ServiceRadar.
 
-It exercises the first browser dashboard ABI:
+It exercises the first browser dashboard ABIs:
+
+- `dashboard-browser-module-v1` for trusted same-origin browser modules.
+- `dashboard-wasm-v1` for WASM renderers that emit constrained render models.
+
+For browser modules, the harness provides the same map/deck library names as
+web-ng: `mapboxgl`, `MapboxOverlay`, `ScatterplotLayer`, and `TextLayer`. Pass a
+Mapbox public token through settings (`mapbox_access_token` or
+`mapbox.access_token`). Without a token, packages can still render raster
+basemaps that do not require Mapbox-hosted styles.
+
+The WASM ABI is:
 
 - Interface version: `dashboard-wasm-v1`
 - Preferred entrypoint: `sr_dashboard_init_json(ptr, len)`
