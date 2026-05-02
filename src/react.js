@@ -55,6 +55,13 @@ export function useDashboardNavigation() {
   const {api} = useDashboardContext()
 
   return useMemo(() => ({
+    open(target) {
+      if (typeof api?.navigate === "function") {
+        api.navigate(target)
+      } else if (typeof target === "string" && target.trim()) {
+        window.location.assign(target)
+      }
+    },
     toDevice(deviceUid) {
       const uid = String(deviceUid || "").trim()
       if (!uid) return
@@ -63,6 +70,16 @@ export function useDashboardNavigation() {
         api.navigate({type: "device", uid})
       } else {
         window.location.assign(`/devices/${encodeURIComponent(uid)}`)
+      }
+    },
+    toDashboard(routeSlug) {
+      const slug = String(routeSlug || "").trim()
+      if (!slug) return
+
+      if (typeof api?.navigate === "function") {
+        api.navigate({type: "dashboard", route_slug: slug})
+      } else {
+        window.location.assign(`/dashboards/${encodeURIComponent(slug)}`)
       }
     },
   }), [api])

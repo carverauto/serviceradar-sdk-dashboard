@@ -131,6 +131,22 @@ async function browserModuleApi(host, settings) {
     frame: (id) => resolveFrame(id),
     srql,
     setSrqlQuery: srql.update,
+    navigate: (target) => {
+      if (!capabilityAllowed("navigation.open")) {
+        throw new Error("dashboard capability is not approved: navigation.open")
+      }
+
+      status(`Navigation requested: ${JSON.stringify(target)}`)
+      console.info("ServiceRadar dashboard navigation requested", target)
+    },
+    openDevice: (uid) => {
+      if (!capabilityAllowed("navigation.open")) {
+        throw new Error("dashboard capability is not approved: navigation.open")
+      }
+
+      status(`Device navigation requested: ${uid}`)
+      console.info("ServiceRadar dashboard device navigation requested", uid)
+    },
     arrow: {
       frameBytes: (idOrFrame) => {
         const frame = resolveFrame(idOrFrame)
