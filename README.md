@@ -106,8 +106,9 @@ The `./react` subpath ships TypeScript declarations for the stable browser
 host contract. React dashboards can use `useDashboardFrames`,
 `useDashboardFrame`, `useDashboardTheme`, `useDashboardSrql`,
 `useDashboardSettings`, `useDashboardMapbox`, `useDashboardLibraries`,
-`useDashboardCapability`, and `useDashboardNavigation` instead of reaching into
-raw host internals.
+`useDashboardCapability`, `useDashboardNavigation`,
+`useDashboardPreferences`, `useDashboardSavedQueries`, `useDashboardPopup`, and
+`useDashboardDetails` instead of reaching into raw host internals.
 
 The build output is still a standalone `renderer.js` artifact. Customer authors
 can iterate against the local harness with sample frames/settings and then ship
@@ -212,6 +213,22 @@ renderer with fresh server-filtered rows. The optional `frameQueries` object can
 override individual frame IDs when a dashboard needs detail frames to use a
 different SRQL query from the primary map frame. The old `api.setSrqlQuery`
 alias remains for compatibility, but new packages should prefer `api.srql`.
+
+Host actions that affect ServiceRadar-owned state or shell UI stay behind
+capability checks. React packages should use the SDK hooks rather than direct
+DOM or URL manipulation:
+
+```js
+const preferences = useDashboardPreferences()
+const savedQueries = useDashboardSavedQueries()
+const popup = useDashboardPopup()
+const details = useDashboardDetails()
+
+preferences.set("density", "compact")
+savedQueries.apply("in:wifi_sites site_code:(DEN) limit:500")
+popup.open({title: "DEN", fields: [{label: "APs", value: 42}]}, {x: 24, y: 36})
+details.open({type: "site", site_code: "DEN"})
+```
 
 WASM dashboard renderers use the same frame contract through raw data-provider
 imports:
