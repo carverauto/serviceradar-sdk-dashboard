@@ -70,6 +70,8 @@ import React from "react"
 import {
   mountReactDashboard,
   useDashboardFrame,
+  useDashboardMapbox,
+  useDashboardNavigation,
   useDashboardSrql,
   useDashboardTheme,
 } from "@serviceradar/dashboard-sdk/react"
@@ -78,20 +80,34 @@ function NetworkMap() {
   const sites = useDashboardFrame("sites")
   const srql = useDashboardSrql()
   const theme = useDashboardTheme()
+  const mapbox = useDashboardMapbox()
+  const navigation = useDashboardNavigation()
 
   return (
-    <button onClick={() => srql.update(srql.build({
-      entity: "wifi_sites",
-      include: {site_code: ["DEN"]},
-      limit: 500,
-    }))}>
-      {theme}: {sites?.results?.length || 0} sites
-    </button>
+    <section data-theme={theme} data-map-style={mapbox.style_dark}>
+      <button onClick={() => srql.update(srql.build({
+        entity: "wifi_sites",
+        include: {site_code: ["DEN"]},
+        limit: 500,
+      }))}>
+        {sites?.results?.length || 0} sites
+      </button>
+      <button onClick={() => navigation.toDashboard("ual-network-map")}>
+        Open map
+      </button>
+    </section>
   )
 }
 
 export const mountDashboard = mountReactDashboard(NetworkMap)
 ```
+
+The `./react` subpath ships TypeScript declarations for the stable browser
+host contract. React dashboards can use `useDashboardFrames`,
+`useDashboardFrame`, `useDashboardTheme`, `useDashboardSrql`,
+`useDashboardSettings`, `useDashboardMapbox`, `useDashboardLibraries`,
+`useDashboardCapability`, and `useDashboardNavigation` instead of reaching into
+raw host internals.
 
 The build output is still a standalone `renderer.js` artifact. Customer authors
 can iterate against the local harness with sample frames/settings and then ship

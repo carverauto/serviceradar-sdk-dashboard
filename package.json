@@ -4,9 +4,18 @@
   "description": "ServiceRadar dashboard package SDK for browser module and WASM renderers.",
   "type": "module",
   "exports": {
-    ".": "./src/index.js",
-    "./react": "./src/react.js",
-    "./srql": "./src/srql.js"
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./react": {
+      "types": "./src/react.d.ts",
+      "default": "./src/react.js"
+    },
+    "./srql": {
+      "types": "./src/srql.d.ts",
+      "default": "./src/srql.js"
+    }
   },
   "files": [
     "src",
