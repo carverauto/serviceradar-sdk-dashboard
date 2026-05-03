@@ -8,6 +8,10 @@
       "types": "./src/index.d.ts",
       "default": "./src/index.js"
     },
+    "./frames": {
+      "types": "./src/frames.d.ts",
+      "default": "./src/frames.js"
+    },
     "./react": {
       "types": "./src/react.d.ts",
       "default": "./src/react.js"
@@ -22,6 +26,10 @@
     "srdashboard",
     "tools"
   ],
+  "scripts": {
+    "test": "npm run test:js && go test ./...",
+    "test:js": "node --test tests/*.test.mjs"
+  },
   "peerDependencies": {
     "react": ">=19.2.5",
     "react-dom": ">=19.2.5"

@@ -1,4 +1,5 @@
 import React from "react"
+import {frameRows} from "@serviceradar/dashboard-sdk/frames"
 import {
   useDashboardFrame,
   useDashboardNavigation,
@@ -13,7 +14,7 @@ export function ExampleDashboard() {
   const settings = useDashboardSettings()
   const srql = useDashboardSrql()
   const theme = useDashboardTheme()
-  const sites = Array.isArray(frame?.results) ? frame.results : []
+  const sites = frameRows(frame)
 
   return React.createElement(
     "main",
