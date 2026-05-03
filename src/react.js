@@ -51,6 +51,28 @@ export function useDashboardSrql() {
   return useMemo(() => createSrqlClient(api), [api])
 }
 
+export function useDashboardSettings() {
+  const {host} = useDashboardContext()
+  return host?.settings || host?.instance?.settings || {}
+}
+
+export function useDashboardMapbox() {
+  const {host, api} = useDashboardContext()
+  return useMemo(() => {
+    if (typeof api?.mapbox === "function") return api.mapbox() || {}
+    return host?.mapbox || {}
+  }, [host, api])
+}
+
+export function useDashboardLibraries() {
+  return useDashboardContext().api?.libraries || {}
+}
+
+export function useDashboardCapability(capability) {
+  const {api} = useDashboardContext()
+  return typeof api?.capabilityAllowed === "function" ? api.capabilityAllowed(capability) : false
+}
+
 export function useDashboardNavigation() {
   const {api} = useDashboardContext()
 
