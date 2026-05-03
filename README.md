@@ -170,6 +170,20 @@ const table = await api.arrow.table("sites")
 
 If the active SRQL backend cannot emit Arrow for that query, ServiceRadar falls
 back to `json_rows` with the same frame id so packages can stay compatible.
+The SDK root also exports small frame helpers for packages that need to branch
+between row JSON and raw Arrow IPC bytes without reaching into host internals:
+
+```js
+import {frameRows, isArrowFrame, requireArrowFrameBytes} from "@serviceradar/dashboard-sdk/frames"
+
+const frame = api.frame("sites")
+const rows = frameRows(frame)
+
+if (isArrowFrame(frame)) {
+  const bytes = requireArrowFrameBytes(frame)
+  // Hand bytes to an Arrow decoder or renderer-specific table pipeline.
+}
+```
 
 Browser modules also receive first-class SRQL helpers through `api.srql`.
 Package authors should use these helpers when map/sidebar interactions need to
