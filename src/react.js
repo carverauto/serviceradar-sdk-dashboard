@@ -107,6 +107,74 @@ export function useDashboardNavigation() {
   }), [api])
 }
 
+export function useDashboardPreferences() {
+  const {api} = useDashboardContext()
+  const settings = useDashboardSettings()
+
+  return useMemo(() => ({
+    all() {
+      if (typeof api?.preferences?.all === "function") return api.preferences.all()
+      return settings.preferences && typeof settings.preferences === "object" ? {...settings.preferences} : {}
+    },
+    get(key, fallback = undefined) {
+      if (typeof api?.preferences?.get === "function") return api.preferences.get(key, fallback)
+      const preferences = settings.preferences && typeof settings.preferences === "object" ? settings.preferences : {}
+      const normalized = String(key || "")
+      return Object.prototype.hasOwnProperty.call(preferences, normalized) ? preferences[normalized] : fallback
+    },
+    set(key, value) {
+      if (typeof api?.preferences?.set === "function") return api.preferences.set(key, value)
+      throw new Error("dashboard preferences write API is unavailable")
+    },
+  }), [api, settings])
+}
+
+export function useDashboardSavedQueries() {
+  const {api} = useDashboardContext()
+  const settings = useDashboardSettings()
+
+  return useMemo(() => ({
+    list() {
+      if (typeof api?.savedQueries?.list === "function") return api.savedQueries.list()
+      const savedQueries = settings.saved_queries || settings.savedQueries
+      return Array.isArray(savedQueries) ? savedQueries.map((query) => ({...query})) : []
+    },
+    current(frameId) {
+      if (typeof api?.savedQueries?.current === "function") return api.savedQueries.current(frameId)
+      return createSrqlClient(api).query(frameId)
+    },
+    apply(query, frameQueries = {}) {
+      if (typeof api?.savedQueries?.apply === "function") return api.savedQueries.apply(query, frameQueries)
+      return createSrqlClient(api).update(query, frameQueries)
+    },
+  }), [api, settings])
+}
+
+export function useDashboardPopup() {
+  const {api} = useDashboardContext()
+
+  return useMemo(() => ({
+    open(content, options = {}) {
+      if (typeof api?.popup?.open === "function") return api.popup.open(content, options)
+      throw new Error("dashboard popup API is unavailable")
+    },
+    close() {
+      return api?.popup?.close?.()
+    },
+  }), [api])
+}
+
+export function useDashboardDetails() {
+  const {api} = useDashboardContext()
+
+  return useMemo(() => ({
+    open(target) {
+      if (typeof api?.details?.open === "function") return api.details.open(target)
+      throw new Error("dashboard details API is unavailable")
+    },
+  }), [api])
+}
+
 export function mountReactDashboard(Component) {
   return async function mountDashboard(root, host, api) {
     const reactRoot = createRoot(root)

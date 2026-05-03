@@ -79,6 +79,39 @@ export interface DashboardLibraries {
   [key: string]: unknown
 }
 
+export interface DashboardPreferenceApi {
+  all(): Record<string, unknown>
+  get<T = unknown>(key: string, fallback?: T): T
+  set(key: string, value: unknown): Record<string, unknown>
+}
+
+export interface DashboardSavedQuery {
+  id?: string
+  name?: string
+  query: string
+  frameQueries?: Record<string, string>
+  [key: string]: unknown
+}
+
+export interface DashboardSavedQueryApi {
+  list(): DashboardSavedQuery[]
+  current(frameId?: string): string
+  apply(query: string, frameQueries?: Record<string, string>): void
+}
+
+export interface DashboardPopupHandle {
+  close(): void
+}
+
+export interface DashboardPopupApi {
+  open(content: unknown, options?: {title?: string; x?: number; y?: number; [key: string]: unknown}): DashboardPopupHandle
+  close(): void
+}
+
+export interface DashboardDetailsApi {
+  open(target: string | Record<string, unknown>): void
+}
+
 export interface DashboardApi<Row = Record<string, unknown>> {
   version?: string
   capabilityAllowed?(capability: string): boolean
@@ -97,6 +130,10 @@ export interface DashboardApi<Row = Record<string, unknown>> {
   arrow?: DashboardArrowApi
   mapbox?(): Record<string, unknown>
   libraries?: DashboardLibraries
+  preferences?: DashboardPreferenceApi
+  savedQueries?: DashboardSavedQueryApi
+  popup?: DashboardPopupApi
+  details?: DashboardDetailsApi
   [key: string]: unknown
 }
 
@@ -132,4 +169,8 @@ export function useDashboardNavigation(): {
   toDevice(deviceUid: string): void
   toDashboard(routeSlug: string): void
 }
+export function useDashboardPreferences(): DashboardPreferenceApi
+export function useDashboardSavedQueries(): DashboardSavedQueryApi
+export function useDashboardPopup(): DashboardPopupApi
+export function useDashboardDetails(): DashboardDetailsApi
 export function mountReactDashboard(Component: ComponentType<{host: DashboardHost; api: DashboardApi}>): DashboardMountFunction
