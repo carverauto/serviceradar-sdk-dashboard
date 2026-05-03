@@ -285,6 +285,12 @@ imports for Mapbox and deck.gl. This is intended for customer authors to iterate
 on layout, filters, popups, clustering, and map interaction without standing up
 a ServiceRadar development environment.
 
+The preferred React/Vite starting point lives at
+`tools/dashboard-wasm-harness/examples/react-dashboard/`. It emits a standalone
+`dashboard-browser-module-v1` `renderer.js`, computes the SHA256 digest, and
+writes `dist/manifest.json`, `dist/sample-frames.json`, and
+`dist/sample-settings.json`.
+
 Example for a browser-module package:
 
 ```text

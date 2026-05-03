@@ -73,3 +73,8 @@ execution, and deck.gl rendering remain ServiceRadar web-ng responsibilities.
 
 See `examples/network-map/` for a minimal TinyGo renderer package that emits a
 `deck_map` model from sample SRQL frame rows.
+
+See `examples/react-dashboard/` for the preferred React/Vite browser-module
+template. It builds a standalone `renderer.js`, computes the renderer digest,
+and writes the package manifest and sample frame files used by this harness and
+web-ng package import.
