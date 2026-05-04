@@ -4,6 +4,46 @@ export function frameRows(frame) {
   return []
 }
 
+export function frameDigest(frame) {
+  if (!frame) return ""
+
+  const parts = [
+    String(frame.id ?? ""),
+    String(frame.encoding ?? ""),
+    String(frame.row_count ?? frame.rowCount ?? ""),
+    String(frame.refreshed_at ?? frame.refreshedAt ?? ""),
+    String(frame.generated_at ?? frame.generatedAt ?? ""),
+    String(frame.status ?? ""),
+    String(frame.query ?? ""),
+  ]
+
+  const payload = frame.payload
+  if (payload != null) {
+    if (typeof payload === "string") {
+      parts.push(`s:${payload.length}`)
+    } else if (typeof payload.byteLength === "number") {
+      parts.push(`b:${payload.byteLength}`)
+    }
+  } else if (typeof frame.payload_base64 === "string") {
+    parts.push(`p64:${frame.payload_base64.length}`)
+  }
+
+  return parts.join("|")
+}
+
+export function framesEqual(a, b) {
+  if (a === b) return true
+  if (!Array.isArray(a) || !Array.isArray(b)) return false
+  if (a.length !== b.length) return false
+
+  for (let index = 0; index < a.length; index += 1) {
+    if (a[index] === b[index]) continue
+    if (frameDigest(a[index]) !== frameDigest(b[index])) return false
+  }
+
+  return true
+}
+
 export function isArrowFrame(frame) {
   return String(frame?.encoding || "") === "arrow_ipc"
 }

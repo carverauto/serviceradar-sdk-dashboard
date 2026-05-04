@@ -3,6 +3,13 @@
 This SDK contains helpers for browser dashboard packages that target
 ServiceRadar's dashboard package host interfaces.
 
+The canonical SDK reference — including the React hook surface, the composed
+UAL pattern, and the local harness walkthrough — lives on the developer portal:
+[**developer.serviceradar.cloud/docs/v2/dashboard-sdk**](https://developer.serviceradar.cloud/docs/v2/dashboard-sdk).
+The reference dashboard implementation is the UAL Network Map at
+`~/src/ual-dashboard`. This README mirrors the most important examples for
+anyone reading the SDK source directly.
+
 ## Deployment Model
 
 Dashboard packages are not compiled into ServiceRadar web-ng. ServiceRadar
@@ -113,6 +120,371 @@ host contract. React dashboards can use `useDashboardFrames`,
 The build output is still a standalone `renderer.js` artifact. Customer authors
 can iterate against the local harness with sample frames/settings and then ship
 the same artifact through ServiceRadar package import.
+
+React dashboards with async setup, such as Mapbox/deck.gl controllers, can opt
+into an explicit ready lifecycle. This keeps simple dashboards fast while still
+letting heavier dashboards delay host completion until their controller is
+mounted:
+
+```jsx
+import React from "react"
+import {mountReactDashboard, useDashboardController} from "@serviceradar/dashboard-sdk/react"
+
+function MapDashboard() {
+  const controller = useDashboardController(createMapController)
+
+  if (controller.error) return <div role="alert">Map failed to load</div>
+
+  return <div ref={controller.ref} />
+}
+
+export const mountDashboard = mountReactDashboard(MapDashboard, {waitForReady: true})
+```
+
+`useDashboardController` owns the common imperative-controller lifecycle for
+React dashboards: it passes `(root, host, api)` into your controller factory,
+destroys stale controllers on unmount, reports readiness to
+`mountReactDashboard(..., {waitForReady: true})`, and exposes async startup
+errors for the component to render.
+
+## Production-Grade React Hooks
+
+The SDK ships a layered set of hooks designed for dashboards that need to scale
+to thousands of rows, decode Arrow IPC frames, drive deck.gl maps, and stay
+memoized through every host push. The UAL Network Map dashboard at
+`~/src/ual-dashboard` is the reference implementation that uses every layer
+below; cite it when in doubt.
+
+### Query state — `useDashboardQueryState`
+
+Custom dashboards usually have local filter state (chip toggles, search text,
+viewport bounds, drill selections). That state has to be turned into an SRQL
+query, deduplicated against the previous one, debounced for fast typing, and
+applied through the host's SRQL update API. `useDashboardQueryState` owns all
+of that:
+
+```jsx
+import {useDashboardQueryState} from "@serviceradar/dashboard-sdk/react"
+
+const INITIAL = {region: null, ap: null, search: ""}
+
+function FilterBar() {
+  const queryState = useDashboardQueryState({
+    initialState: INITIAL,
+    debounceMs: 350,
+    buildQuery: (state) => state.region
+      ? `in:wifi_sites region:(${state.region}) limit:500`
+      : "in:wifi_sites limit:500",
+    buildFrameQueries: (state) => state.region
+      ? {aps: `in:wifi_aps region:(${state.region}) limit:500`}
+      : {},
+  })
+
+  return (
+    <>
+      <input
+        value={queryState.state.search}
+        onChange={(event) => queryState.apply({search: event.target.value})}
+      />
+      {["AMERICAS", "EMEA", "APAC"].map((region) => (
+        <button key={region} onClick={() => queryState.apply({region})}>
+          {region}
+        </button>
+      ))}
+      <button onClick={() => queryState.reset()}>Reset</button>
+      {queryState.dirty ? <span>updating…</span> : null}
+    </>
+  )
+}
+```
+
+The hook returns `{state, query, frameQueries, dirty, apply, reset, flush, hydrate}`.
+Identical apply/reset calls are deduped by query+frame-overrides fingerprint —
+`useDashboardQueryState` only invokes `api.srql.update` when the fingerprint
+actually changes. The framework-agnostic core is exposed as
+`createDashboardQueryState` at `@serviceradar/dashboard-sdk/query-state` for
+non-React consumers.
+
+### Frame data — `useFrameRows`, `useArrowTable`, `useDashboardFrame`
+
+`useDashboardFrame` and `useDashboardFrames` now bail out when the incoming
+frame digest matches the cached one, so identical host pushes do not invalidate
+downstream `useMemo` deps. `useFrameRows` decodes a frame to a row array with
+optional Arrow IPC handling and optional row-shape projection — both are cached
+by the SDK so repeated calls with the same shape on the same frame return the
+same reference:
+
+```jsx
+import {useFrameRows} from "@serviceradar/dashboard-sdk/react"
+
+const SITE_SHAPE = Object.freeze({
+  site_code: (row) => String(row.site_code || row.iata || "").toUpperCase(),
+  region: "region",
+  latitude: (row) => Number(row.latitude ?? row.lat),
+  longitude: (row) => Number(row.longitude ?? row.lon),
+})
+
+function SitesTable() {
+  const sites = useFrameRows("sites", {decode: "auto", shape: SITE_SHAPE})
+  return <span>{sites.length} sites</span>
+}
+```
+
+`decode` accepts `"auto"` (default — Arrow IPC if the frame carries it,
+otherwise JSON), `"arrow"`, or `"json"`. Apache Arrow is dynamically imported
+only when an Arrow path actually decodes — JSON-only dashboards do not pay the
+bundle cost. For column-oriented advanced consumers there's also
+`useArrowTable(frame)` which returns the decoded `apache-arrow` `Table` once
+the lazy decoder loads. Tests can inject a custom decoder via
+`setArrowDecoder(fn)` from `@serviceradar/dashboard-sdk/arrow`.
+
+### Indexed local filtering — `useIndexedRows`, `useFilterState`
+
+Reference dashboards (the standalone HTML map at `tmp/wifi-map/`) achieve
+responsive filtering by precomputing per-row Sets and a single lowercase
+haystack at data load. `useIndexedRows` provides that primitive:
+
+```jsx
+import {useFilterState, useIndexedRows} from "@serviceradar/dashboard-sdk/react"
+
+const INDEX_BY = {
+  region: "region",
+  apFamily: (site) => site.ap_families,
+  wlcModel: (site) => Object.keys(site.wlc_models || {}),
+}
+
+function SiteList({sites}) {
+  const filters = useFilterState({
+    initialState: {regions: [], apFamilies: [], wlcModels: [], search: ""},
+    debounceMs: 350,
+    debounceFields: ["search"],
+  })
+
+  const indexed = useIndexedRows(sites, {indexBy: INDEX_BY, searchText: ["site_code", "name"]})
+
+  const visible = indexed.applyFilters({
+    region: filters.state.regions,
+    apFamily: filters.state.apFamilies,
+    wlcModel: filters.state.wlcModels,
+    search: filters.debouncedState.search,
+  })
+
+  return (
+    <ul>
+      {visible.map((site) => <li key={site.site_code}>{site.site_code}</li>)}
+    </ul>
+  )
+}
+```
+
+`indexed.applyFilters` returns the rows array via Set intersection rather than
+linear scans. Indexes rebuild only when the input row reference changes —
+combined with the digest-stable refs from `useFrameRows`, that means a no-op
+host push doesn't rebuild any indexes. `useFilterState` returns stable
+`setFilter` / `toggle` / `clear` callbacks for chip groups and supports a
+debounced `debouncedState` view per field for SRQL-roundtrip drivers.
+
+`useFilterState` and `useDashboardQueryState` compose: feed
+`filters.debouncedState` into `queryState.apply` to drive the SRQL roundtrip,
+while `filters.state` drives the immediate sidebar response.
+
+### Map runtime — `useDeckMap`, `useDeckLayers`
+
+Mapbox GL JS, `MapboxOverlay`, and the deck.gl layer constructors are injected
+by the host through `api.libraries`. `useDeckMap` validates them, instantiates
+the map and overlay once, throttles `moveend`/`zoomend`, and swaps basemap
+style on theme change without tearing down the deck overlay:
+
+```jsx
+import {useDeckMap, useDeckLayers, scatter, text} from "@serviceradar/dashboard-sdk/map"
+
+function MapStage({sites, dark}) {
+  const handle = useDeckMap({
+    initialViewState: {center: [-98.5, 39.8], zoom: 3.7},
+    viewportThrottleMs: 120,
+    onViewStateChange: (next) => console.log(next.zoom),
+  })
+
+  const accessors = useMemo(() => ({
+    getPosition: (site) => [site.longitude, site.latitude],
+    getRadius: 8,
+  }), [])
+
+  const visualProps = useMemo(() => ({
+    pickable: true,
+    radiusUnits: "pixels",
+    getFillColor: dark ? [17, 24, 39, 238] : [255, 255, 255, 248],
+    getLineColor: [31, 34, 207, 255],
+  }), [dark])
+
+  useDeckLayers(handle, {
+    sites: scatter("sites", {data: sites, accessors, visualProps, events: {onClick: console.log}}),
+    labels: text("labels", {
+      data: sites,
+      accessors: useMemo(() => ({
+        getPosition: (site) => [site.longitude, site.latitude],
+        getText: (site) => site.site_code,
+      }), []),
+      visualProps: useMemo(() => ({getSize: 13, background: true}), []),
+    }),
+  })
+
+  return <div ref={handle.containerRef} className="map-stage" />
+}
+```
+
+The memoization contract is the load-bearing perf lever: as long as `data`,
+`accessors`, and `visualProps` references are stable, `useDeckLayers` reuses
+the underlying deck.gl layer instance and the GPU buffers do not rebuild.
+Inline `accessors={{getPosition: (s) => [...]}}` allocates new functions every
+render and forces deck.gl to rebuild — wrap them in `useMemo` with deps that
+reflect what actually drives rendering.
+
+`handle` exposes `{containerRef, ready, viewState, map, overlay, flyTo}`. Use
+`flyTo({center, zoom})` for sidebar-driven map navigation.
+
+Available factory helpers: `scatter`, `text`, `icon`, `line`. They're thin
+wrappers that stamp the right `kind` so the spec is more readable; you can
+also write specs by hand.
+
+### React-mounted Mapbox popups — `useMapPopup`
+
+Mapbox popups are imperative — `new mapboxgl.Popup().setHTML(...)`. To render
+React content inside them with managed lifecycle, use `useMapPopup`:
+
+```jsx
+import {useMapPopup} from "@serviceradar/dashboard-sdk/popup"
+
+function MapWithPopup({handle, focusedSite, onClose}) {
+  const popup = useMapPopup(handle.map, {
+    closeOnClick: false,
+    offset: 18,
+    onClose,
+  })
+
+  useEffect(() => {
+    if (!focusedSite) {
+      popup.close()
+      return
+    }
+    popup.open({
+      coordinates: [focusedSite.longitude, focusedSite.latitude],
+      content: <SitePopup site={focusedSite} />,
+    })
+  }, [focusedSite, popup])
+
+  return null
+}
+```
+
+The popup is created lazily on first `open`. Subsequent `open` calls re-render
+the React subtree inside the existing popup — they don't recreate it or
+re-anchor it unless coordinates change. `close` (or the user dismissing the
+popup) unmounts the React root before removing the popup from the map, so no
+React roots leak.
+
+### A composed example
+
+Here is the production pattern in roughly 80 lines — frame ingest, filter
+state, SRQL roundtrip, indexed local filtering, map, and popup all working
+together:
+
+```jsx
+import React, {useCallback, useMemo, useState} from "react"
+import {
+  mountReactDashboard,
+  useDashboardQueryState,
+  useDashboardTheme,
+  useFilterState,
+  useFrameRows,
+  useIndexedRows,
+} from "@serviceradar/dashboard-sdk/react"
+import {scatter, useDeckLayers, useDeckMap} from "@serviceradar/dashboard-sdk/map"
+import {useMapPopup} from "@serviceradar/dashboard-sdk/popup"
+
+const SITE_SHAPE = Object.freeze({
+  site_code: (row) => String(row.site_code || row.iata).toUpperCase(),
+  region: "region",
+  latitude: (row) => Number(row.latitude ?? row.lat),
+  longitude: (row) => Number(row.longitude ?? row.lon),
+  ap_count: (row) => Number(row.ap_count || 0),
+})
+
+const INDEX_BY = {region: "region"}
+const INITIAL = {regions: [], search: ""}
+
+function NetworkMap() {
+  const sites = useFrameRows("sites", {decode: "auto", shape: SITE_SHAPE})
+  const dark = useDashboardTheme() === "dark"
+
+  const filters = useFilterState({initialState: INITIAL, debounceMs: 350, debounceFields: ["search"]})
+  const indexed = useIndexedRows(sites, {indexBy: INDEX_BY, searchText: ["site_code"]})
+
+  const queryState = useDashboardQueryState({
+    initialState: INITIAL,
+    debounceMs: 350,
+    buildQuery: (state) => state.regions.length
+      ? `in:wifi_sites region:(${state.regions.join(",")}) limit:500`
+      : "in:wifi_sites limit:500",
+  })
+
+  // Drive the SRQL roundtrip from debounced filter state
+  React.useEffect(() => {
+    queryState.apply(filters.debouncedState)
+  }, [filters.debouncedState, queryState])
+
+  const visible = useMemo(() => indexed.applyFilters({
+    region: filters.state.regions,
+    search: filters.debouncedState.search,
+  }), [indexed, filters.state.regions, filters.debouncedState.search])
+
+  const handle = useDeckMap({initialViewState: {center: [-98.5, 39.8], zoom: 3.7}})
+
+  const accessors = useMemo(() => ({getPosition: (s) => [s.longitude, s.latitude], getRadius: 8}), [])
+  const visualProps = useMemo(() => ({
+    pickable: true,
+    radiusUnits: "pixels",
+    getFillColor: dark ? [17, 24, 39, 238] : [255, 255, 255, 248],
+  }), [dark])
+
+  const [focused, setFocused] = useState(null)
+
+  useDeckLayers(handle, {
+    sites: scatter("sites", {
+      data: visible,
+      accessors,
+      visualProps,
+      events: {onClick: (info) => setFocused(info?.object || null)},
+    }),
+  })
+
+  const popup = useMapPopup(handle.map, {closeOnClick: false, onClose: () => setFocused(null)})
+
+  React.useEffect(() => {
+    if (!focused) { popup.close(); return }
+    popup.open({
+      coordinates: [focused.longitude, focused.latitude],
+      content: <div><strong>{focused.site_code}</strong> · {focused.ap_count} APs</div>,
+    })
+  }, [focused, popup])
+
+  return <div ref={handle.containerRef} style={{position: "absolute", inset: 0}} />
+}
+
+export const mountDashboard = mountReactDashboard(NetworkMap)
+```
+
+This is the pattern — frame data flows through shape projections,
+`useFilterState` owns the local UI response, `useDashboardQueryState` owns the
+SRQL roundtrip, `useIndexedRows` owns the per-keystroke filter pass,
+`useDeckMap` + `useDeckLayers` own the map lifecycle and layer memoization, and
+`useMapPopup` owns the React-into-Mapbox popup bridge. Each layer is
+independently testable; the framework-agnostic cores
+(`createDashboardQueryState`, `createIndexedRows`, `createReactMapPopupController`)
+are exposed at `/query-state`, `/filtering`, and `/popup` for non-React
+consumers.
+
+## Lower-Level Surfaces
 
 Trusted browser modules can render deck.gl maps directly because the host passes
 the map/deck constructors through `api.libraries`:

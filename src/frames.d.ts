@@ -16,3 +16,5 @@ export function isArrowFrame(frame?: DashboardFrame): boolean
 export function frameBytes(frame?: DashboardFrame): Uint8Array
 export function requireArrowFrameBytes(frame?: DashboardFrame): Uint8Array
 export function looksLikeArrowIPC(payload: ArrayBuffer | Uint8Array | ArrayBufferView): boolean
+export function frameDigest(frame?: DashboardFrame): string
+export function framesEqual(a?: DashboardFrame[], b?: DashboardFrame[]): boolean
