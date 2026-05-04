@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import {frameBytes, frameRows, isArrowFrame, looksLikeArrowIPC, requireArrowFrameBytes} from "../src/frames.js"
+import {frameBytes, frameDigest, frameRows, framesEqual, isArrowFrame, looksLikeArrowIPC, requireArrowFrameBytes} from "../src/frames.js"
 
 test("frameRows returns JSON rows from either results or rows", () => {
   assert.deepEqual(frameRows({results: [{site_code: "DEN"}]}), [{site_code: "DEN"}])
@@ -32,4 +32,48 @@ test("looksLikeArrowIPC accepts Arrow IPC file magic at either end", () => {
   assert.equal(looksLikeArrowIPC(Uint8Array.from(Buffer.from("ARROW1payload"))), true)
   assert.equal(looksLikeArrowIPC(Uint8Array.from(Buffer.from("payloadARROW1"))), true)
   assert.equal(looksLikeArrowIPC(Uint8Array.from(Buffer.from("{\"results\":[]}"))), false)
+})
+
+test("frameDigest combines identity-bearing fields without scanning rows", () => {
+  const a = {
+    id: "sites",
+    encoding: "json_rows",
+    row_count: 500,
+    refreshed_at: "2026-05-03T12:00:00Z",
+    status: "ok",
+    query: "in:wifi_sites limit:500",
+    results: [{site: "DEN"}],
+  }
+  const b = {
+    id: "sites",
+    encoding: "json_rows",
+    row_count: 500,
+    refreshed_at: "2026-05-03T12:00:00Z",
+    status: "ok",
+    query: "in:wifi_sites limit:500",
+    results: [{site: "ORD"}],
+  }
+  const c = {...a, refreshed_at: "2026-05-03T12:30:00Z"}
+
+  assert.equal(frameDigest(a), frameDigest(b))
+  assert.notEqual(frameDigest(a), frameDigest(c))
+})
+
+test("frameDigest factors in payload size for arrow frames", () => {
+  const small = {id: "aps", encoding: "arrow_ipc", payload: new Uint8Array(64)}
+  const large = {id: "aps", encoding: "arrow_ipc", payload: new Uint8Array(128)}
+
+  assert.notEqual(frameDigest(small), frameDigest(large))
+})
+
+test("framesEqual treats arrays of digest-equal frames as equal", () => {
+  const original = [
+    {id: "sites", encoding: "json_rows", row_count: 1, refreshed_at: "t", results: [{a: 1}]},
+    {id: "aps", encoding: "json_rows", row_count: 1, refreshed_at: "t", results: [{b: 2}]},
+  ]
+  const repushed = original.map((frame) => ({...frame, results: frame.results.map((row) => ({...row}))}))
+
+  assert.ok(framesEqual(original, repushed))
+  assert.equal(framesEqual(original, [{id: "sites"}]), false)
+  assert.equal(framesEqual(original, [original[0], {...original[1], refreshed_at: "later"}]), false)
 })

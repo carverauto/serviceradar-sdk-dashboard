@@ -19,6 +19,26 @@
     "./srql": {
       "types": "./src/srql.d.ts",
       "default": "./src/srql.js"
+    },
+    "./query-state": {
+      "types": "./src/query-state.d.ts",
+      "default": "./src/query-state.js"
+    },
+    "./filtering": {
+      "types": "./src/filtering.d.ts",
+      "default": "./src/filtering.js"
+    },
+    "./arrow": {
+      "types": "./src/arrow.d.ts",
+      "default": "./src/arrow.js"
+    },
+    "./map": {
+      "types": "./src/map.d.ts",
+      "default": "./src/map.js"
+    },
+    "./popup": {
+      "types": "./src/popup.d.ts",
+      "default": "./src/popup.js"
     }
   },
   "files": [
