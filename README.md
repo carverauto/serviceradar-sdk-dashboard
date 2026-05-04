@@ -15,10 +15,10 @@ anyone reading the SDK source directly.
 Dashboard packages should consume the SDK from npm:
 
 ```bash
-npm install @serviceradar/dashboard-sdk react react-dom
+npm install @carverauto/serviceradar-dashboard-sdk react react-dom
 ```
 
-This single install pulls in `@serviceradar/cli` transitively as a dependency,
+This single install pulls in `@carverauto/serviceradar-cli` transitively as a dependency,
 so the `serviceradar-cli` bin lands in your project's `node_modules/.bin/`
 automatically. Project npm scripts can call `serviceradar-cli dashboard <subcommand>`
 directly; for ad-hoc invocation use `npx serviceradar-cli ...`.
@@ -29,7 +29,7 @@ dependency, but published dashboard packages should depend on the npm package.
 ## CLI
 
 The companion CLI lives in the ServiceRadar monorepo at
-`~/src/serviceradar/js/cli/` and ships separately as `@serviceradar/cli`. It
+`~/src/serviceradar/js/cli/` and ships separately as `@carverauto/serviceradar-cli`. It
 exposes two subcommand groups:
 
 - `serviceradar-cli dashboard <init|build|dev|validate|manifest|publish|import>`
@@ -117,7 +117,7 @@ import {
   useDashboardNavigation,
   useDashboardSrql,
   useDashboardTheme,
-} from "@serviceradar/dashboard-sdk/react"
+} from "@carverauto/serviceradar-dashboard-sdk/react"
 
 function NetworkMap() {
   const sites = useDashboardFrame("sites")
@@ -169,7 +169,7 @@ mounted:
 
 ```jsx
 import React from "react"
-import {mountReactDashboard, useDashboardController} from "@serviceradar/dashboard-sdk/react"
+import {mountReactDashboard, useDashboardController} from "@carverauto/serviceradar-dashboard-sdk/react"
 
 function MapDashboard() {
   const controller = useDashboardController(createMapController)
@@ -205,7 +205,7 @@ applied through the host's SRQL update API. `useDashboardQueryState` owns all
 of that:
 
 ```jsx
-import {useDashboardQueryState} from "@serviceradar/dashboard-sdk/react"
+import {useDashboardQueryState} from "@carverauto/serviceradar-dashboard-sdk/react"
 
 const INITIAL = {region: null, ap: null, search: ""}
 
@@ -243,7 +243,7 @@ The hook returns `{state, query, frameQueries, dirty, apply, reset, flush, hydra
 Identical apply/reset calls are deduped by query+frame-overrides fingerprint —
 `useDashboardQueryState` only invokes `api.srql.update` when the fingerprint
 actually changes. The framework-agnostic core is exposed as
-`createDashboardQueryState` at `@serviceradar/dashboard-sdk/query-state` for
+`createDashboardQueryState` at `@carverauto/serviceradar-dashboard-sdk/query-state` for
 non-React consumers.
 
 ### Frame data — `useFrameRows`, `useArrowTable`, `useDashboardFrame`
@@ -256,7 +256,7 @@ by the SDK so repeated calls with the same shape on the same frame return the
 same reference:
 
 ```jsx
-import {useFrameRows} from "@serviceradar/dashboard-sdk/react"
+import {useFrameRows} from "@carverauto/serviceradar-dashboard-sdk/react"
 
 const SITE_SHAPE = Object.freeze({
   site_code: (row) => String(row.site_code || row.iata || "").toUpperCase(),
@@ -277,7 +277,7 @@ only when an Arrow path actually decodes — JSON-only dashboards do not pay the
 bundle cost. For column-oriented advanced consumers there's also
 `useArrowTable(frame)` which returns the decoded `apache-arrow` `Table` once
 the lazy decoder loads. Tests can inject a custom decoder via
-`setArrowDecoder(fn)` from `@serviceradar/dashboard-sdk/arrow`.
+`setArrowDecoder(fn)` from `@carverauto/serviceradar-dashboard-sdk/arrow`.
 
 ### Indexed local filtering — `useIndexedRows`, `useFilterState`
 
@@ -286,7 +286,7 @@ responsive filtering by precomputing per-row Sets and a single lowercase
 haystack at data load. `useIndexedRows` provides that primitive:
 
 ```jsx
-import {useFilterState, useIndexedRows} from "@serviceradar/dashboard-sdk/react"
+import {useFilterState, useIndexedRows} from "@carverauto/serviceradar-dashboard-sdk/react"
 
 const INDEX_BY = {
   region: "region",
@@ -337,7 +337,7 @@ the map and overlay once, throttles `moveend`/`zoomend`, and swaps basemap
 style on theme change without tearing down the deck overlay:
 
 ```jsx
-import {useDeckMap, useDeckLayers, scatter, text} from "@serviceradar/dashboard-sdk/map"
+import {useDeckMap, useDeckLayers, scatter, text} from "@carverauto/serviceradar-dashboard-sdk/map"
 
 function MapStage({sites, dark}) {
   const handle = useDeckMap({
@@ -394,7 +394,7 @@ Mapbox popups are imperative — `new mapboxgl.Popup().setHTML(...)`. To render
 React content inside them with managed lifecycle, use `useMapPopup`:
 
 ```jsx
-import {useMapPopup} from "@serviceradar/dashboard-sdk/popup"
+import {useMapPopup} from "@carverauto/serviceradar-dashboard-sdk/popup"
 
 function MapWithPopup({handle, focusedSite, onClose}) {
   const popup = useMapPopup(handle.map, {
@@ -439,9 +439,9 @@ import {
   useFilterState,
   useFrameRows,
   useIndexedRows,
-} from "@serviceradar/dashboard-sdk/react"
-import {scatter, useDeckLayers, useDeckMap} from "@serviceradar/dashboard-sdk/map"
-import {useMapPopup} from "@serviceradar/dashboard-sdk/popup"
+} from "@carverauto/serviceradar-dashboard-sdk/react"
+import {scatter, useDeckLayers, useDeckMap} from "@carverauto/serviceradar-dashboard-sdk/map"
+import {useMapPopup} from "@carverauto/serviceradar-dashboard-sdk/popup"
 
 const SITE_SHAPE = Object.freeze({
   site_code: (row) => String(row.site_code || row.iata).toUpperCase(),
@@ -588,7 +588,7 @@ The SDK root also exports small frame helpers for packages that need to branch
 between row JSON and raw Arrow IPC bytes without reaching into host internals:
 
 ```js
-import {frameRows, isArrowFrame, requireArrowFrameBytes} from "@serviceradar/dashboard-sdk/frames"
+import {frameRows, isArrowFrame, requireArrowFrameBytes} from "@carverauto/serviceradar-dashboard-sdk/frames"
 
 const frame = api.frame("sites")
 const rows = frameRows(frame)
@@ -789,7 +789,7 @@ enabled.
 
 ## npm Release
 
-The package is published as `@serviceradar/dashboard-sdk`. Pull requests and
+The package is published as `@carverauto/serviceradar-dashboard-sdk`. Pull requests and
 pushes run `npm run ci`, which executes JavaScript tests, Go tests, and
 `npm pack --dry-run`.
 
