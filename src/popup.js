@@ -1,7 +1,7 @@
-import {useCallback, useEffect, useMemo, useRef} from "react"
+import React, {useCallback, useEffect, useMemo, useRef} from "react"
 import {createRoot as defaultCreateRoot} from "react-dom/client"
 
-import {useDashboardLibraries} from "./react.js"
+import {DashboardProvider, useDashboardApi, useDashboardHost, useDashboardLibraries} from "./react.js"
 
 export function createReactMapPopupController({map, mapboxgl, createRoot, options = {}}) {
   let popup = null
@@ -15,6 +15,7 @@ export function createReactMapPopupController({map, mapboxgl, createRoot, option
     className: options.className,
     anchor: options.anchor,
     maxWidth: options.maxWidth,
+    wrapContent: options.wrapContent,
   }
 
   function disposeRoot() {
@@ -82,9 +83,7 @@ export function createReactMapPopupController({map, mapboxgl, createRoot, option
       }
     }
 
-    if (root) {
-      root.render(content)
-    }
+    if (root) root.render(wrapContent(content, settings))
   }
 
   function isOpen() {
@@ -96,6 +95,8 @@ export function createReactMapPopupController({map, mapboxgl, createRoot, option
 
 export function useMapPopup(map, options = {}) {
   const libraries = useDashboardLibraries()
+  const host = useDashboardHost()
+  const api = useDashboardApi()
   const optionsRef = useRef(options)
   optionsRef.current = options
   const controllerRef = useRef(null)
@@ -116,10 +117,19 @@ export function useMapPopup(map, options = {}) {
       map,
       mapboxgl,
       createRoot: optionsRef.current.createRoot || defaultCreateRoot,
-      options: optionsRef.current,
+      options: {
+        ...optionsRef.current,
+        wrapContent: (content) => React.createElement(
+          DashboardProvider,
+          {host, api},
+          typeof optionsRef.current.wrapContent === "function"
+            ? optionsRef.current.wrapContent(content)
+            : content,
+        ),
+      },
     })
     return controllerRef.current
-  }, [map, libraries])
+  }, [map, libraries, host, api])
 
   const open = useCallback((request) => {
     const controller = ensureController()
@@ -152,4 +162,8 @@ function createDomNode() {
   // Sentinel for environments without DOM (e.g. unit tests with mocked Popup); the real
   // Popup integration only runs in the browser, but createRoot consumers may inject a stub.
   return {nodeType: 1, children: [], appendChild() {}}
+}
+
+function wrapContent(content, settings) {
+  return typeof settings.wrapContent === "function" ? settings.wrapContent(content) : content
 }

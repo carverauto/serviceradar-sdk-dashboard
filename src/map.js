@@ -3,6 +3,24 @@ import {useCallback, useEffect, useMemo, useRef, useState} from "react"
 import {useDashboardLibraries, useDashboardMapbox, useDashboardTheme} from "./react.js"
 
 const REQUIRED_LIBRARIES = ["mapboxgl", "MapboxOverlay"]
+const FALLBACK_STYLES = Object.freeze({
+  dark: Object.freeze({
+    version: 8,
+    name: "ServiceRadar dark fallback",
+    sources: {},
+    layers: [
+      {id: "background", type: "background", paint: {"background-color": "#0f172a"}},
+    ],
+  }),
+  light: Object.freeze({
+    version: 8,
+    name: "ServiceRadar light fallback",
+    sources: {},
+    layers: [
+      {id: "background", type: "background", paint: {"background-color": "#f8fafc"}},
+    ],
+  }),
+})
 
 export function useDeckMap(options = {}) {
   const libraries = useDashboardLibraries()
@@ -38,7 +56,7 @@ export function useDeckMap(options = {}) {
     }
 
     const initialViewState = normalizeViewState(optionsRef.current.initialViewState)
-    const initialStyle = pickStyle(optionsRef.current.style, mapbox, theme)
+    const initialStyle = pickStyle(optionsRef.current.style, mapbox, theme, {hasAccessToken: Boolean(accessToken)})
 
     const map = new mapboxgl.Map({
       container: node,
@@ -99,7 +117,8 @@ export function useDeckMap(options = {}) {
     const handle = handleRef.current
     if (!handle.map || !ready) return undefined
 
-    const desiredStyle = pickStyle(options.style, mapbox, theme)
+    const accessToken = mapbox.access_token || mapbox.accessToken
+    const desiredStyle = pickStyle(options.style, mapbox, theme, {hasAccessToken: Boolean(accessToken)})
     const currentStyle = readStyleId(handle.map)
     if (currentStyle === desiredStyle) return undefined
 
@@ -252,22 +271,46 @@ function normalizeViewState(input, fallback) {
   }
 }
 
-function pickStyle(explicit, mapbox, theme) {
-  if (typeof explicit === "string" && explicit.trim()) return explicit
-  if (mapbox?.style && typeof mapbox.style === "string") return mapbox.style
+function pickStyle(explicit, mapbox, theme, options = {}) {
+  if (isStyleObject(explicit)) return cloneStyle(explicit)
+  if (typeof explicit === "string" && explicit.trim()) return styleOrFallback(explicit, theme, options)
+  if (isStyleObject(mapbox?.style)) return cloneStyle(mapbox.style)
+  if (mapbox?.style && typeof mapbox.style === "string") return styleOrFallback(mapbox.style, theme, options)
   if (mapbox?.styles && typeof mapbox.styles === "object") {
     const themed = mapbox.styles[theme] || mapbox.styles.default
-    if (typeof themed === "string" && themed.trim()) return themed
+    if (isStyleObject(themed)) return cloneStyle(themed)
+    if (typeof themed === "string" && themed.trim()) return styleOrFallback(themed, theme, options)
   }
-  return theme === "dark"
+  const themed = theme === "dark"
+    ? mapbox?.style_dark || mapbox?.styleDark
+    : mapbox?.style_light || mapbox?.styleLight
+  if (isStyleObject(themed)) return cloneStyle(themed)
+  if (typeof themed === "string" && themed.trim()) return styleOrFallback(themed, theme, options)
+
+  return styleOrFallback(theme === "dark"
     ? "mapbox://styles/mapbox/dark-v11"
-    : "mapbox://styles/mapbox/light-v11"
+    : "mapbox://styles/mapbox/light-v11", theme, options)
 }
 
 function readStyleId(map) {
   if (!map || typeof map.getStyle !== "function") return null
   const style = map.getStyle()
   return style?.metadata?.["mapbox:origin"] || style?.sprite || style?.name || null
+}
+
+function styleOrFallback(style, theme, options) {
+  if (!options.hasAccessToken && /^mapbox:\/\//.test(String(style || ""))) {
+    return cloneStyle(theme === "dark" ? FALLBACK_STYLES.dark : FALLBACK_STYLES.light)
+  }
+  return style
+}
+
+function isStyleObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value)
+}
+
+function cloneStyle(style) {
+  return JSON.parse(JSON.stringify(style))
 }
 
 function throttle(fn, ms) {

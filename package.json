@@ -3,6 +3,17 @@
   "version": "0.1.0",
   "description": "ServiceRadar dashboard package SDK for browser module and WASM renderers.",
   "type": "module",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@code.carverauto.dev/carverauto/serviceradar-sdk-dashboard.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "serviceradar-dashboard": "bin/serviceradar-dashboard.js"
+  },
   "exports": {
     ".": {
       "types": "./src/index.d.ts",
@@ -42,11 +53,14 @@
     }
   },
   "files": [
+    "bin",
     "src",
     "srdashboard",
     "tools"
   ],
   "scripts": {
+    "ci": "npm test && npm run pack:check",
+    "pack:check": "npm pack --dry-run",
     "test": "npm run test:js && go test ./...",
     "test:js": "node --test tests/*.test.mjs"
   },
@@ -54,9 +68,11 @@
     "react": ">=19.2.5",
     "react-dom": ">=19.2.5"
   },
-  "devDependencies": {
+  "dependencies": {
     "@vitejs/plugin-react": "^5.0.4",
-    "vite": "^7.1.12",
+    "vite": "^7.1.12"
+  },
+  "devDependencies": {
     "react": "^19.2.5",
     "react-dom": "^19.2.5"
   }

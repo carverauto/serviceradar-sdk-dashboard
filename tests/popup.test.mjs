@@ -108,6 +108,24 @@ test("controller opens a popup, mounts a React root, and renders content", () =>
   assert.equal(controller.isOpen(), true)
 })
 
+test("controller preserves the configured content wrapper before rendering", () => {
+  const {mapboxgl} = makeFakeMapbox()
+  const {roots, createRoot} = makeFakeCreateRoot()
+
+  const controller = createReactMapPopupController({
+    map: {},
+    mapboxgl,
+    createRoot,
+    options: {
+      wrapContent: (content) => ({kind: "wrapped-popup", content}),
+    },
+  })
+
+  controller.open({coordinates: [-104, 39], content: "FIRST"})
+
+  assert.deepEqual(roots[0].renders, [{kind: "wrapped-popup", content: "FIRST"}])
+})
+
 test("subsequent open re-renders content without recreating the popup", () => {
   const {mapboxgl, popups} = makeFakeMapbox()
   const {roots, createRoot} = makeFakeCreateRoot()
