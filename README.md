@@ -18,8 +18,33 @@ Dashboard packages should consume the SDK from npm:
 npm install @serviceradar/dashboard-sdk react react-dom
 ```
 
+This single install pulls in `@serviceradar/cli` transitively as a dependency,
+so the `serviceradar-cli` bin lands in your project's `node_modules/.bin/`
+automatically. Project npm scripts can call `serviceradar-cli dashboard <subcommand>`
+directly; for ad-hoc invocation use `npx serviceradar-cli ...`.
+
 During local SDK development, customer packages may temporarily use a file
 dependency, but published dashboard packages should depend on the npm package.
+
+## CLI
+
+The companion CLI lives in the ServiceRadar monorepo at
+`~/src/serviceradar/js/cli/` and ships separately as `@serviceradar/cli`. It
+exposes two subcommand groups:
+
+- `serviceradar-cli dashboard <init|build|dev|validate|manifest|publish|import>`
+  — full dashboard authoring loop (Vite-driven build, HMR dev harness,
+  scaffolder, publish to a ServiceRadar instance).
+- `serviceradar-cli auth <login|status|logout>` — RFC 8628 device-code login
+  with manual-token fallback. Stores credentials at
+  `~/.config/serviceradar/credentials.json` (mode `0600`).
+
+The legacy `serviceradar-dashboard` bin name is preserved as a transitional
+alias that prints a deprecation notice and routes to
+`serviceradar-cli dashboard *`. Removal scheduled for the release after.
+
+Canonical docs:
+[`developer.serviceradar.cloud/docs/v2/dashboard-sdk`](https://developer.serviceradar.cloud/docs/v2/dashboard-sdk).
 
 ## Deployment Model
 
@@ -716,10 +741,12 @@ like this after installing the SDK:
 ```json
 {
   "scripts": {
-    "dev": "serviceradar-dashboard dev",
-    "build": "serviceradar-dashboard build",
-    "manifest": "serviceradar-dashboard manifest",
-    "import:local": "serviceradar-dashboard import"
+    "dev": "serviceradar-cli dashboard dev",
+    "build": "serviceradar-cli dashboard build",
+    "validate": "serviceradar-cli dashboard validate",
+    "manifest": "serviceradar-cli dashboard manifest",
+    "publish": "serviceradar-cli dashboard publish",
+    "import:local": "serviceradar-cli dashboard import"
   }
 }
 ```
