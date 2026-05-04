@@ -188,7 +188,18 @@ function sanitizeFrameQueries(input) {
 function cloneState(value) {
   if (value == null) return {}
   if (Array.isArray(value)) return value.slice()
-  if (typeof value === "object") return {...value}
+  if (value instanceof Set) return new Set(value)
+  if (value instanceof Map) return new Map(value)
+  if (typeof value === "object") {
+    const out = {}
+    for (const [key, entry] of Object.entries(value)) {
+      if (Array.isArray(entry)) out[key] = entry.slice()
+      else if (entry instanceof Set) out[key] = new Set(entry)
+      else if (entry instanceof Map) out[key] = new Map(entry)
+      else out[key] = entry
+    }
+    return out
+  }
   return value
 }
 

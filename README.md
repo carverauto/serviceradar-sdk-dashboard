@@ -10,6 +10,17 @@ The reference dashboard implementation is the UAL Network Map at
 `~/src/ual-dashboard`. This README mirrors the most important examples for
 anyone reading the SDK source directly.
 
+## Install
+
+Dashboard packages should consume the SDK from npm:
+
+```bash
+npm install @serviceradar/dashboard-sdk react react-dom
+```
+
+During local SDK development, customer packages may temporarily use a file
+dependency, but published dashboard packages should depend on the npm package.
+
 ## Deployment Model
 
 Dashboard packages are not compiled into ServiceRadar web-ng. ServiceRadar
@@ -120,6 +131,11 @@ host contract. React dashboards can use `useDashboardFrames`,
 The build output is still a standalone `renderer.js` artifact. Customer authors
 can iterate against the local harness with sample frames/settings and then ship
 the same artifact through ServiceRadar package import.
+
+The SDK should own the repeatable package commands that create that artifact:
+renderer bundling, manifest digest stamping, harness launch, and local import
+validation. Customer dashboard repositories own the React dashboard code,
+package identity, frame declarations, sample data, and settings schema.
 
 React dashboards with async setup, such as Mapbox/deck.gl controllers, can opt
 into an explicit ready lifecycle. This keeps simple dashboards fast while still
@@ -694,6 +710,28 @@ The preferred React/Vite starting point lives at
 writes `dist/manifest.json`, `dist/sample-frames.json`, and
 `dist/sample-settings.json`.
 
+The package tooling surface is SDK-owned. Customer packages can wire scripts
+like this after installing the SDK:
+
+```json
+{
+  "scripts": {
+    "dev": "serviceradar-dashboard dev",
+    "build": "serviceradar-dashboard build",
+    "manifest": "serviceradar-dashboard manifest",
+    "import:local": "serviceradar-dashboard import"
+  }
+}
+```
+
+The CLI reads `dashboard.config.mjs`, `dashboard.config.js`,
+`dashboard.config.json`, or `package.json#serviceradarDashboard`. `build`
+bundles a browser-module renderer with SDK Vite defaults, computes the renderer
+SHA256, writes `dist/manifest.json`, and copies configured sample frames and
+settings. `dev` builds and serves the SDK harness. `import` verifies the
+manifest/artifact digest and can delegate to a local ServiceRadar import command
+through `SERVICERADAR_DASHBOARD_IMPORT_COMMAND`.
+
 Example for a browser-module package:
 
 ```text
@@ -721,3 +759,23 @@ The harness is not an authorization or package-verification substitute. It is a
 local rendering loop. ServiceRadar production import still verifies manifest
 shape, artifact digest, trust policy, and capabilities before a dashboard can be
 enabled.
+
+## npm Release
+
+The package is published as `@serviceradar/dashboard-sdk`. Pull requests and
+pushes run `npm run ci`, which executes JavaScript tests, Go tests, and
+`npm pack --dry-run`.
+
+Release publishing is handled by GitHub Actions in the mirrored repository via
+`.github/workflows/npm-publish.yml`. The workflow uses npm trusted publishing
+with GitHub OIDC, so it does not require `NPM_TOKEN`.
+
+1. Update `package.json` to the target semver.
+2. Tag the SDK repo as `v<package.json version>`, for example `v0.1.0`.
+3. Push the tag to Forgejo and let the GitHub mirror receive the same tag.
+4. Ensure npmjs.com has a trusted publisher configured for the GitHub mirror
+   repository and workflow file `.github/workflows/npm-publish.yml`.
+5. Let the tag-triggered GitHub workflow publish, or run the workflow manually
+   with the same tag.
+
+The workflow refuses to publish if the tag does not match the package version.

@@ -4,7 +4,7 @@ import {createSrqlClient} from "./srql.js"
 import {createDashboardQueryState} from "./query-state.js"
 import {frameDigest, frameRows, isArrowFrame} from "./frames.js"
 import {decodeArrowFrame} from "./arrow.js"
-import {createIndexedRows} from "./filtering.js"
+import {createIndexedRows, indexedRowDigest} from "./filtering.js"
 
 const DashboardContext = createContext(null)
 
@@ -90,8 +90,9 @@ export function useFrameRowsFromFrame(frame, options) {
 export function useIndexedRows(rows, options) {
   const optionsRef = useRef(options)
   optionsRef.current = options
+  const optionsDigest = indexedRowDigest(options)
 
-  return useMemo(() => createIndexedRows(rows, optionsRef.current), [rows])
+  return useMemo(() => createIndexedRows(rows, optionsRef.current), [rows, optionsDigest])
 }
 
 export function useFilterState(options = {}) {
@@ -515,11 +516,12 @@ function destroyMounted(mounted) {
 
 const projectionCache = new WeakMap()
 const decodedRowsCache = new WeakMap()
+const EMPTY_ROWS = Object.freeze([])
 
 function useDecodedFrameRows(frame, options) {
   const decode = options?.decode || "auto"
   const shape = options?.shape || null
-  const fallback = options?.fallback || []
+  const fallback = Array.isArray(options?.fallback) ? options.fallback : EMPTY_ROWS
 
   const initialRows = useMemo(() => {
     if (!frame) return fallback
@@ -573,7 +575,9 @@ function useDecodedFrameRows(frame, options) {
 }
 
 function projectRows(frame, rows, shape) {
-  if (!shape) return rows || []
+  const sourceRows = Array.isArray(rows) ? rows : EMPTY_ROWS
+
+  if (!shape) return sourceRows
 
   let perFrame = projectionCache.get(frame)
   if (!perFrame) {
@@ -584,7 +588,7 @@ function projectRows(frame, rows, shape) {
   const cached = perFrame.get(shape)
   if (cached) return cached
 
-  const projected = rows.map((row) => projectRow(row, shape))
+  const projected = sourceRows.map((row) => projectRow(row, shape))
   perFrame.set(shape, projected)
   return projected
 }

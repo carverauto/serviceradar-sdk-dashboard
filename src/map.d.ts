@@ -9,7 +9,7 @@ export interface DeckMapViewState {
 
 export interface UseDeckMapOptions {
   initialViewState?: Partial<DeckMapViewState>
-  style?: string
+  style?: string | Record<string, unknown>
   viewportThrottleMs?: number
   onViewStateChange?(next: DeckMapViewState): void
   mapOptions?: Record<string, unknown>
