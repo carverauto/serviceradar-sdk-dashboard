@@ -26,21 +26,28 @@ export function useDeckMap(options = {}) {
   const libraries = useDashboardLibraries()
   const mapbox = useDashboardMapbox()
   const theme = useDashboardTheme()
+  const mapboxgl = libraries.mapboxgl
+  const MapboxOverlay = libraries.MapboxOverlay
+  const accessToken = mapbox.access_token || mapbox.accessToken || ""
 
   const containerRef = useRef(null)
   const handleRef = useRef({map: null, overlay: null, viewState: null})
   const optionsRef = useRef(options)
   optionsRef.current = options
+  const appliedStyleSignatureRef = useRef(null)
 
   const [ready, setReady] = useState(false)
   const [viewState, setViewState] = useState(() => normalizeViewState(options.initialViewState))
 
   const validate = useCallback(() => {
-    const missing = REQUIRED_LIBRARIES.filter((name) => !libraries[name])
+    const missing = [
+      mapboxgl ? null : "mapboxgl",
+      MapboxOverlay ? null : "MapboxOverlay",
+    ].filter(Boolean)
     if (missing.length > 0) {
       throw new Error(`useDeckMap: missing host libraries (${missing.join(", ")}). The host must inject mapboxgl and @deck.gl/mapbox.`)
     }
-  }, [libraries])
+  }, [mapboxgl, MapboxOverlay])
 
   useEffect(() => {
     const node = containerRef.current
@@ -48,15 +55,13 @@ export function useDeckMap(options = {}) {
 
     validate()
 
-    const mapboxgl = libraries.mapboxgl
-    const MapboxOverlay = libraries.MapboxOverlay
-    const accessToken = mapbox.access_token || mapbox.accessToken
     if (accessToken && mapboxgl.accessToken !== accessToken) {
       mapboxgl.accessToken = accessToken
     }
 
     const initialViewState = normalizeViewState(optionsRef.current.initialViewState)
     const initialStyle = pickStyle(optionsRef.current.style, mapbox, theme, {hasAccessToken: Boolean(accessToken)})
+    appliedStyleSignatureRef.current = styleSignature(initialStyle)
 
     const map = new mapboxgl.Map({
       container: node,
@@ -69,7 +74,7 @@ export function useDeckMap(options = {}) {
     })
 
     const overlay = new MapboxOverlay({
-      interleaved: optionsRef.current.interleaved !== false,
+      interleaved: optionsRef.current.interleaved === true,
       layers: [],
     })
     map.addControl(overlay)
@@ -103,28 +108,30 @@ export function useDeckMap(options = {}) {
         map.off("load", handleLoad)
         map.off("moveend", viewHandler)
         map.off("zoomend", viewHandler)
+        viewHandler.cancel?.()
         map.remove()
       } catch (error) {
         // best-effort teardown
       }
 
       handleRef.current = {map: null, overlay: null, viewState: null}
+      appliedStyleSignatureRef.current = null
       setReady(false)
     }
-  }, [libraries, mapbox, validate])
+  }, [mapboxgl, MapboxOverlay, validate])
 
   useEffect(() => {
     const handle = handleRef.current
     if (!handle.map || !ready) return undefined
 
-    const accessToken = mapbox.access_token || mapbox.accessToken
     const desiredStyle = pickStyle(options.style, mapbox, theme, {hasAccessToken: Boolean(accessToken)})
-    const currentStyle = readStyleId(handle.map)
-    if (currentStyle === desiredStyle) return undefined
+    const desiredSignature = styleSignature(desiredStyle)
+    if (appliedStyleSignatureRef.current === desiredSignature) return undefined
 
     handle.map.setStyle(desiredStyle, {diff: true})
+    appliedStyleSignatureRef.current = desiredSignature
     return undefined
-  }, [options.style, mapbox, theme, ready])
+  }, [options.style, mapbox, theme, ready, accessToken])
 
   return useMemo(() => ({
     containerRef,
@@ -292,17 +299,17 @@ function pickStyle(explicit, mapbox, theme, options = {}) {
     : "mapbox://styles/mapbox/light-v11", theme, options)
 }
 
-function readStyleId(map) {
-  if (!map || typeof map.getStyle !== "function") return null
-  const style = map.getStyle()
-  return style?.metadata?.["mapbox:origin"] || style?.sprite || style?.name || null
-}
-
 function styleOrFallback(style, theme, options) {
   if (!options.hasAccessToken && /^mapbox:\/\//.test(String(style || ""))) {
     return cloneStyle(theme === "dark" ? FALLBACK_STYLES.dark : FALLBACK_STYLES.light)
   }
   return style
+}
+
+function styleSignature(style) {
+  if (typeof style === "string") return `url:${style}`
+  if (isStyleObject(style)) return `json:${JSON.stringify(style)}`
+  return String(style || "")
 }
 
 function isStyleObject(value) {
@@ -318,7 +325,7 @@ function throttle(fn, ms) {
   let pendingArgs = null
   let lastArgs = null
 
-  return function throttled(...args) {
+  function throttled(...args) {
     lastArgs = args
     if (timer != null) {
       pendingArgs = args
@@ -334,6 +341,15 @@ function throttle(fn, ms) {
       }
     }, ms)
   }
+
+  throttled.cancel = () => {
+    if (timer != null) clearTimeout(timer)
+    timer = null
+    pendingArgs = null
+    lastArgs = null
+  }
+
+  return throttled
 }
 
 function stableEventBag(refStore, id, events) {

@@ -59,3 +59,48 @@ test("createSrqlClient wraps host srql API and frame query updates", () => {
     },
   ])
 })
+
+test("createSrqlClient bridges distinct legacy setSrqlQuery hosts", () => {
+  const calls = []
+  const hostApi = {
+    srql: {
+      update(query, frameQueries) {
+        calls.push({method: "srql.update", query, frameQueries})
+      },
+    },
+    setSrqlQuery(query, frameQueries) {
+      calls.push({method: "setSrqlQuery", query, frameQueries})
+    },
+  }
+  const client = createSrqlClient(hostApi)
+
+  client.update("in:wifi_sites site_code:(DEN) limit:500", {
+    devices: "in:wifi_aps site_code:(DEN) limit:20000",
+  })
+
+  assert.deepEqual(calls, [
+    {
+      method: "srql.update",
+      query: "in:wifi_sites site_code:(DEN) limit:500",
+      frameQueries: {devices: "in:wifi_aps site_code:(DEN) limit:20000"},
+    },
+    {
+      method: "setSrqlQuery",
+      query: "in:wifi_sites site_code:(DEN) limit:500",
+      frameQueries: {devices: "in:wifi_aps site_code:(DEN) limit:20000"},
+    },
+  ])
+})
+
+test("createSrqlClient does not duplicate when setSrqlQuery aliases srql.update", () => {
+  const calls = []
+  const update = (query, frameQueries) => calls.push({query, frameQueries})
+  const client = createSrqlClient({
+    srql: {update},
+    setSrqlQuery: update,
+  })
+
+  client.update("in:wifi_sites limit:500")
+
+  assert.equal(calls.length, 1)
+})
