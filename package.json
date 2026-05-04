@@ -68,7 +68,7 @@
     "react-dom": ">=19.2.5"
   },
   "dependencies": {
-    "@carverauto/serviceradar-cli": "file:../serviceradar/js/cli"
+    "@carverauto/serviceradar-cli": "^0.1.0"
   },
   "devDependencies": {
     "react": "^19.2.5",
