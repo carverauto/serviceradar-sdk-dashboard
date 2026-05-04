@@ -11,9 +11,6 @@
   "publishConfig": {
     "access": "public"
   },
-  "bin": {
-    "serviceradar-dashboard": "bin/serviceradar-dashboard.js"
-  },
   "exports": {
     ".": {
       "types": "./src/index.d.ts",
@@ -50,13 +47,15 @@
     "./popup": {
       "types": "./src/popup.d.ts",
       "default": "./src/popup.js"
+    },
+    "./config": {
+      "types": "./src/config.d.ts",
+      "default": "./src/config.js"
     }
   },
   "files": [
-    "bin",
     "src",
-    "srdashboard",
-    "tools"
+    "srdashboard"
   ],
   "scripts": {
     "ci": "npm test && npm run pack:check",
@@ -69,8 +68,7 @@
     "react-dom": ">=19.2.5"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "^5.0.4",
-    "vite": "^7.1.12"
+    "@serviceradar/cli": "file:../serviceradar/js/cli"
   },
   "devDependencies": {
     "react": "^19.2.5",

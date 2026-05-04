@@ -30,11 +30,12 @@ export function buildSrqlQuery(options = {}) {
 export function createSrqlClient(api) {
   const fallback = api?.srql || {}
   const query = typeof fallback.query === "function" ? fallback.query.bind(fallback) : () => ""
-  const update = typeof fallback.update === "function"
-    ? fallback.update.bind(fallback)
-    : typeof api?.setSrqlQuery === "function"
-      ? api.setSrqlQuery.bind(api)
-      : () => {}
+  const srqlUpdate = typeof fallback.update === "function" ? fallback.update.bind(fallback) : null
+  const legacyUpdate = typeof api?.setSrqlQuery === "function" ? api.setSrqlQuery.bind(api) : null
+  const update = (query, frameQueries = {}) => {
+    if (srqlUpdate) srqlUpdate(query, frameQueries)
+    if (legacyUpdate && fallback.update !== api?.setSrqlQuery) legacyUpdate(query, frameQueries)
+  }
 
   return {
     query,
