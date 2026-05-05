@@ -2,7 +2,6 @@ import {useCallback, useEffect, useMemo, useRef, useState} from "react"
 
 import {useDashboardLibraries, useDashboardMapbox, useDashboardTheme} from "./react.js"
 
-const REQUIRED_LIBRARIES = ["mapboxgl", "MapboxOverlay"]
 const FALLBACK_STYLES = Object.freeze({
   dark: Object.freeze({
     version: 8,
@@ -21,17 +20,18 @@ const FALLBACK_STYLES = Object.freeze({
     ],
   }),
 })
+const INERT_MAPBOX_TOKEN = "pk.eyJ1Ijoic2VydmljZXJhZGFyIiwiYSI6ImNsb2NhbCJ9.local"
 
-export function useDeckMap(options = {}) {
+export function useMapboxMap(options = {}) {
   const libraries = useDashboardLibraries()
   const mapbox = useDashboardMapbox()
   const theme = useDashboardTheme()
   const mapboxgl = libraries.mapboxgl
-  const MapboxOverlay = libraries.MapboxOverlay
-  const accessToken = mapbox.access_token || mapbox.accessToken || ""
+  const accessToken = normalizeMapboxToken(mapbox.access_token || mapbox.accessToken)
+  const hasMapboxToken = looksLikeMapboxPublicToken(accessToken)
 
   const containerRef = useRef(null)
-  const handleRef = useRef({map: null, overlay: null, viewState: null})
+  const handleRef = useRef({map: null, viewState: null})
   const optionsRef = useRef(options)
   optionsRef.current = options
   const appliedStyleSignatureRef = useRef(null)
@@ -42,12 +42,11 @@ export function useDeckMap(options = {}) {
   const validate = useCallback(() => {
     const missing = [
       mapboxgl ? null : "mapboxgl",
-      MapboxOverlay ? null : "MapboxOverlay",
     ].filter(Boolean)
     if (missing.length > 0) {
-      throw new Error(`useDeckMap: missing host libraries (${missing.join(", ")}). The host must inject mapboxgl and @deck.gl/mapbox.`)
+      throw new Error(`useMapboxMap: missing host libraries (${missing.join(", ")}). The host must inject mapboxgl.`)
     }
-  }, [mapboxgl, MapboxOverlay])
+  }, [mapboxgl])
 
   useEffect(() => {
     const node = containerRef.current
@@ -55,12 +54,12 @@ export function useDeckMap(options = {}) {
 
     validate()
 
-    if (accessToken && mapboxgl.accessToken !== accessToken) {
-      mapboxgl.accessToken = accessToken
-    }
-
     const initialViewState = normalizeViewState(optionsRef.current.initialViewState)
-    const initialStyle = pickStyle(optionsRef.current.style, mapbox, theme, {hasAccessToken: Boolean(accessToken)})
+    const initialStyle = pickStyle(optionsRef.current.style, mapbox, theme, {hasAccessToken: hasMapboxToken})
+    const styleNeedsMapboxToken = styleRequiresMapboxToken(initialStyle)
+
+    applyMapboxToken(mapboxgl, {accessToken, hasMapboxToken, styleNeedsMapboxToken})
+
     appliedStyleSignatureRef.current = styleSignature(initialStyle)
 
     const map = new mapboxgl.Map({
@@ -73,13 +72,7 @@ export function useDeckMap(options = {}) {
       ...optionsRef.current.mapOptions,
     })
 
-    const overlay = new MapboxOverlay({
-      interleaved: optionsRef.current.interleaved === true,
-      layers: [],
-    })
-    map.addControl(overlay)
-
-    handleRef.current = {map, overlay, viewState: initialViewState}
+    handleRef.current = {map, viewState: initialViewState}
 
     const handleLoad = () => setReady(true)
     map.on("load", handleLoad)
@@ -114,24 +107,27 @@ export function useDeckMap(options = {}) {
         // best-effort teardown
       }
 
-      handleRef.current = {map: null, overlay: null, viewState: null}
+      handleRef.current = {map: null, viewState: null}
       appliedStyleSignatureRef.current = null
       setReady(false)
     }
-  }, [mapboxgl, MapboxOverlay, validate])
+  }, [mapboxgl, validate])
 
   useEffect(() => {
     const handle = handleRef.current
     if (!handle.map || !ready) return undefined
 
-    const desiredStyle = pickStyle(options.style, mapbox, theme, {hasAccessToken: Boolean(accessToken)})
+    const desiredStyle = pickStyle(options.style, mapbox, theme, {hasAccessToken: hasMapboxToken})
+    const styleNeedsMapboxToken = styleRequiresMapboxToken(desiredStyle)
+    applyMapboxToken(mapboxgl, {accessToken, hasMapboxToken, styleNeedsMapboxToken})
+
     const desiredSignature = styleSignature(desiredStyle)
     if (appliedStyleSignatureRef.current === desiredSignature) return undefined
 
     handle.map.setStyle(desiredStyle, {diff: true})
     appliedStyleSignatureRef.current = desiredSignature
     return undefined
-  }, [options.style, mapbox, theme, ready, accessToken])
+  }, [options.style, mapbox, theme, ready, hasMapboxToken, accessToken, mapboxgl])
 
   return useMemo(() => ({
     containerRef,
@@ -139,9 +135,6 @@ export function useDeckMap(options = {}) {
     viewState,
     get map() {
       return handleRef.current.map
-    },
-    get overlay() {
-      return handleRef.current.overlay
     },
     flyTo(target) {
       const handle = handleRef.current
@@ -156,6 +149,55 @@ export function useDeckMap(options = {}) {
       })
     },
   }), [ready, viewState])
+}
+
+export function useDeckMap(options = {}) {
+  const libraries = useDashboardLibraries()
+  const MapboxOverlay = libraries.MapboxOverlay
+  const mapHandle = useMapboxMap(options)
+  const map = mapHandle.map
+  const interleaved = options.interleaved === true
+  const overlayRef = useRef(null)
+  const [overlayVersion, setOverlayVersion] = useState(0)
+
+  useEffect(() => {
+    if (!map) return undefined
+
+    if (!MapboxOverlay) {
+      throw new Error("useDeckMap: missing host libraries (MapboxOverlay). The host must inject @deck.gl/mapbox.")
+    }
+
+    const overlay = new MapboxOverlay({
+      interleaved,
+      layers: [],
+    })
+    map.addControl(overlay)
+    overlayRef.current = overlay
+    setOverlayVersion((version) => version + 1)
+
+    return () => {
+      try {
+        map.removeControl?.(overlay)
+      } catch (error) {
+        // best-effort teardown
+      }
+      overlayRef.current = null
+      setOverlayVersion((version) => version + 1)
+    }
+  }, [map, MapboxOverlay, interleaved])
+
+  return useMemo(() => ({
+    containerRef: mapHandle.containerRef,
+    ready: mapHandle.ready && Boolean(overlayRef.current),
+    viewState: mapHandle.viewState,
+    get map() {
+      return mapHandle.map
+    },
+    get overlay() {
+      return overlayRef.current
+    },
+    flyTo: mapHandle.flyTo,
+  }), [mapHandle, overlayVersion])
 }
 
 export function useDeckLayers(handle, spec) {
@@ -304,6 +346,27 @@ function styleOrFallback(style, theme, options) {
     return cloneStyle(theme === "dark" ? FALLBACK_STYLES.dark : FALLBACK_STYLES.light)
   }
   return style
+}
+
+function normalizeMapboxToken(token) {
+  return String(token || "").trim()
+}
+
+function looksLikeMapboxPublicToken(token) {
+  return /^pk\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(normalizeMapboxToken(token))
+}
+
+function applyMapboxToken(mapboxgl, {accessToken, hasMapboxToken, styleNeedsMapboxToken}) {
+  const nextToken = hasMapboxToken && styleNeedsMapboxToken ? accessToken : INERT_MAPBOX_TOKEN
+  if (mapboxgl.accessToken !== nextToken) {
+    mapboxgl.accessToken = nextToken
+  }
+}
+
+function styleRequiresMapboxToken(style) {
+  if (typeof style === "string") return /^mapbox:\/\//.test(style)
+  if (!isStyleObject(style)) return false
+  return /(?:mapbox:\/\/|api\.mapbox\.com|tiles\.mapbox\.com)/.test(JSON.stringify(style))
 }
 
 function styleSignature(style) {
