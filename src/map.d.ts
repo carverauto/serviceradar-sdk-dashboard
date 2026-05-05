@@ -16,13 +16,18 @@ export interface UseDeckMapOptions {
   interleaved?: boolean
 }
 
-export interface DeckMapHandle<Container extends Element = HTMLDivElement> {
+export type UseMapboxMapOptions = Omit<UseDeckMapOptions, "interleaved">
+
+export interface MapboxMapHandle<Container extends Element = HTMLDivElement> {
   containerRef: RefObject<Container | null>
   ready: boolean
   viewState: DeckMapViewState
   readonly map: unknown
-  readonly overlay: unknown
   flyTo(target: Partial<DeckMapViewState> & {options?: Record<string, unknown>}): void
+}
+
+export interface DeckMapHandle<Container extends Element = HTMLDivElement> extends MapboxMapHandle<Container> {
+  readonly overlay: unknown
 }
 
 export interface DeckLayerEvents {
@@ -44,6 +49,10 @@ export interface DeckLayerSpec<DataItem = unknown> {
 }
 
 export type DeckLayerMap = Record<string, Omit<DeckLayerSpec, "id">>
+
+export function useMapboxMap<Container extends Element = HTMLDivElement>(
+  options?: UseMapboxMapOptions,
+): MapboxMapHandle<Container>
 
 export function useDeckMap<Container extends Element = HTMLDivElement>(
   options?: UseDeckMapOptions,

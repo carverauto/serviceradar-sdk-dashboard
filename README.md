@@ -340,12 +340,29 @@ debounced `debouncedState` view per field for SRQL-roundtrip drivers.
 `filters.debouncedState` into `queryState.apply` to drive the SRQL roundtrip,
 while `filters.state` drives the immediate sidebar response.
 
-### Map runtime — `useDeckMap`, `useDeckLayers`
+### Map runtime — `useMapboxMap`, `useDeckMap`, `useDeckLayers`
 
-Mapbox GL JS, `MapboxOverlay`, and the deck.gl layer constructors are injected
-by the host through `api.libraries`. `useDeckMap` validates them, instantiates
-the map and overlay once, throttles `moveend`/`zoomend`, and swaps basemap
-style on theme change without tearing down the deck overlay:
+Mapbox GL JS is injected by the host through `api.libraries`. Use
+`useMapboxMap` for dashboards that only need the map lifecycle, DOM markers, or
+Mapbox sources/layers:
+
+```jsx
+import {useMapboxMap} from "@carverauto/serviceradar-dashboard-sdk/map"
+
+function MapStage() {
+  const handle = useMapboxMap({
+    initialViewState: {center: [-98.5, 39.8], zoom: 3.7},
+    viewportThrottleMs: 120,
+    onViewStateChange: (next) => console.log(next.zoom),
+  })
+
+  return <div ref={handle.containerRef} className="map-stage" />
+}
+```
+
+For GPU-backed layers, `MapboxOverlay` and deck.gl layer constructors are also
+injected by the host. `useDeckMap` composes `useMapboxMap`, instantiates the
+overlay once, and `useDeckLayers` owns deck layer memoization:
 
 ```jsx
 import {useDeckMap, useDeckLayers, scatter, text} from "@carverauto/serviceradar-dashboard-sdk/map"
