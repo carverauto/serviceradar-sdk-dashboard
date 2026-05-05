@@ -1,0 +1,69 @@
+name: Publish npm Package
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish, for example v0.1.0."
+        required: true
+        type: string
+      dry_run:
+        description: "Run validation without publishing."
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish
+    runs-on: ubuntu-24.04
+    env:
+      INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+      INPUT_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ env.INPUT_TAG }}
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24"
+          cache: npm
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Setup Go
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - name: Verify release tag matches package version
+        run: |
+          set -euo pipefail
+
+          version="$(node -p "require('./package.json').version")"
+          expected="v${version}"
+          if [ "${INPUT_TAG}" != "${expected}" ]; then
+            echo "Release tag ${INPUT_TAG} does not match package version ${version}; expected ${expected}." >&2
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run tests and package dry-run
+        run: npm run ci
+
+      - name: Publish package with trusted publishing
+        if: ${{ env.INPUT_DRY_RUN != 'true' }}
+        run: npm publish --access public

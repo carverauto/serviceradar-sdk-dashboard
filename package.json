@@ -1,25 +1,76 @@
 {
-  "name": "@serviceradar/dashboard-sdk",
+  "name": "@carverauto/serviceradar-dashboard-sdk",
   "version": "0.1.0",
   "description": "ServiceRadar dashboard package SDK for browser module and WASM renderers.",
   "type": "module",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@code.carverauto.dev/carverauto/serviceradar-sdk-dashboard.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
-    ".": "./src/index.js",
-    "./react": "./src/react.js",
-    "./srql": "./src/srql.js"
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./frames": {
+      "types": "./src/frames.d.ts",
+      "default": "./src/frames.js"
+    },
+    "./react": {
+      "types": "./src/react.d.ts",
+      "default": "./src/react.js"
+    },
+    "./srql": {
+      "types": "./src/srql.d.ts",
+      "default": "./src/srql.js"
+    },
+    "./query-state": {
+      "types": "./src/query-state.d.ts",
+      "default": "./src/query-state.js"
+    },
+    "./filtering": {
+      "types": "./src/filtering.d.ts",
+      "default": "./src/filtering.js"
+    },
+    "./arrow": {
+      "types": "./src/arrow.d.ts",
+      "default": "./src/arrow.js"
+    },
+    "./map": {
+      "types": "./src/map.d.ts",
+      "default": "./src/map.js"
+    },
+    "./popup": {
+      "types": "./src/popup.d.ts",
+      "default": "./src/popup.js"
+    },
+    "./config": {
+      "types": "./src/config.d.ts",
+      "default": "./src/config.js"
+    }
   },
   "files": [
     "src",
-    "srdashboard",
-    "tools"
+    "srdashboard"
   ],
+  "scripts": {
+    "ci": "npm test && npm run pack:check",
+    "pack:check": "npm pack --dry-run",
+    "test": "npm run test:js && go test ./...",
+    "test:js": "node --test tests/*.test.mjs"
+  },
   "peerDependencies": {
     "react": ">=19.2.5",
     "react-dom": ">=19.2.5"
   },
+  "dependencies": {
+    "@carverauto/serviceradar-cli": "^0.1.0"
+  },
   "devDependencies": {
-    "@vitejs/plugin-react": "^5.0.4",
-    "vite": "^7.1.12",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"
   }
