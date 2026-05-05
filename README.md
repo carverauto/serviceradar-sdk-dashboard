@@ -3,12 +3,11 @@
 This SDK contains helpers for browser dashboard packages that target
 ServiceRadar's dashboard package host interfaces.
 
-The canonical SDK reference — including the React hook surface, the composed
-UAL pattern, and the local harness walkthrough — lives on the developer portal:
+The canonical SDK reference — including the React hook surface, composed map
+patterns, and the local harness walkthrough — lives on the developer portal:
 [**developer.serviceradar.cloud/docs/v2/dashboard-sdk**](https://developer.serviceradar.cloud/docs/v2/dashboard-sdk).
-The reference dashboard implementation is the UAL Network Map at
-`~/src/ual-dashboard`. This README mirrors the most important examples for
-anyone reading the SDK source directly.
+This README mirrors the most important examples for anyone reading the SDK
+source directly.
 
 ## Install
 
@@ -146,7 +145,7 @@ function NetworkMap() {
       }))}>
         {sites?.results?.length || 0} sites
       </button>
-      <button onClick={() => navigation.toDashboard("ual-network-map")}>
+      <button onClick={() => navigation.toDashboard("network-map")}>
         Open map
       </button>
     </section>
@@ -168,10 +167,10 @@ The build output is still a standalone `renderer.js` artifact. Customer authors
 can iterate against the local harness with sample frames/settings and then ship
 the same artifact through ServiceRadar package import.
 
-The SDK should own the repeatable package commands that create that artifact:
-renderer bundling, manifest digest stamping, harness launch, and local import
-validation. Customer dashboard repositories own the React dashboard code,
-package identity, frame declarations, sample data, and settings schema.
+The companion ServiceRadar CLI owns the repeatable package commands that create
+that artifact: renderer bundling, manifest digest stamping, harness launch, and
+local import validation. Customer dashboard repositories own the React dashboard
+code, package identity, frame declarations, sample data, and settings schema.
 
 React dashboards with async setup, such as Mapbox/deck.gl controllers, can opt
 into an explicit ready lifecycle. This keeps simple dashboards fast while still
@@ -202,10 +201,8 @@ errors for the component to render.
 ## Production-Grade React Hooks
 
 The SDK ships a layered set of hooks designed for dashboards that need to scale
-to thousands of rows, decode Arrow IPC frames, drive deck.gl maps, and stay
-memoized through every host push. The UAL Network Map dashboard at
-`~/src/ual-dashboard` is the reference implementation that uses every layer
-below; cite it when in doubt.
+to thousands of rows, decode Arrow IPC frames, drive Mapbox or deck.gl maps, and
+stay memoized through every host push.
 
 ### Query state — `useDashboardQueryState`
 
@@ -292,9 +289,9 @@ the lazy decoder loads. Tests can inject a custom decoder via
 
 ### Indexed local filtering — `useIndexedRows`, `useFilterState`
 
-Reference dashboards (the standalone HTML map at `tmp/wifi-map/`) achieve
-responsive filtering by precomputing per-row Sets and a single lowercase
-haystack at data load. `useIndexedRows` provides that primitive:
+Responsive dashboards can avoid repeated linear scans by precomputing per-row
+Sets and a single lowercase haystack at data load. `useIndexedRows` provides
+that primitive:
 
 ```jsx
 import {useFilterState, useIndexedRows} from "@carverauto/serviceradar-dashboard-sdk/react"
@@ -344,7 +341,7 @@ while `filters.state` drives the immediate sidebar response.
 
 Mapbox GL JS is injected by the host through `api.libraries`. Use
 `useMapboxMap` for dashboards that only need the map lifecycle, DOM markers, or
-Mapbox sources/layers:
+Mapbox sources/layers and do not need deck.gl/luma:
 
 ```jsx
 import {useMapboxMap} from "@carverauto/serviceradar-dashboard-sdk/map"
@@ -735,36 +732,22 @@ models; ServiceRadar owns the deck.gl, Mapbox, popup, and event wiring.
 
 ## Local Harness
 
-The SDK repo also owns the local dashboard development harness:
+The companion CLI also provides the local dashboard development harness:
 
 ```bash
-cd tools/dashboard-wasm-harness/examples/network-map
-./build.sh
-
-cd ../..
-python3 -m http.server 4177
+npm run dev
 ```
 
-Then open:
-
-```text
-http://localhost:4177/?manifest=./examples/network-map/dist/manifest.json&wasm=./examples/network-map/dist/dashboard.wasm&frames=./examples/network-map/dist/sample-frames.json&settings=./examples/network-map/dist/sample-settings.json
-```
-
-For trusted browser modules, the same harness imports the renderer module,
-passes sample frames/settings, and provides `api.libraries` using browser module
-imports for Mapbox and deck.gl. This is intended for customer authors to iterate
-on layout, filters, popups, clustering, and map interaction without standing up
-a ServiceRadar development environment.
-
-The preferred React/Vite starting point lives at
-`tools/dashboard-wasm-harness/examples/react-dashboard/`. It emits a standalone
+The harness imports the renderer module, passes sample frames/settings, and
+provides `api.libraries` using browser module imports for Mapbox and deck.gl.
+This is intended for customer authors to iterate on layout, filters, popups,
+clustering, and map interaction without standing up a ServiceRadar development
+environment. The React/Vite build emits a standalone
 `dashboard-browser-module-v1` `renderer.js`, computes the SHA256 digest, and
 writes `dist/manifest.json`, `dist/sample-frames.json`, and
 `dist/sample-settings.json`.
 
-The package tooling surface is SDK-owned. Customer packages can wire scripts
-like this after installing the SDK:
+Customer packages can wire scripts like this after installing the SDK:
 
 ```json
 {
@@ -790,7 +773,7 @@ through `SERVICERADAR_DASHBOARD_IMPORT_COMMAND`.
 Example for a browser-module package:
 
 ```text
-http://localhost:4177/?manifest=/ual-dashboard/dist/manifest.json&wasm=/ual-dashboard/dist/renderer.js&frames=/ual-dashboard/dist/sample-frames.json&settings=/ual-dashboard/dist/sample-settings.json
+http://localhost:4177/?manifest=/dashboard/dist/manifest.json&wasm=/dashboard/dist/renderer.js&frames=/dashboard/dist/sample-frames.json&settings=/dashboard/dist/sample-settings.json
 ```
 
 The `wasm` query parameter is currently the generic renderer artifact URL; for
