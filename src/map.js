@@ -357,7 +357,7 @@ function looksLikeMapboxPublicToken(token) {
 }
 
 function applyMapboxToken(mapboxgl, {accessToken, hasMapboxToken, styleNeedsMapboxToken}) {
-  const nextToken = hasMapboxToken && styleNeedsMapboxToken ? accessToken : INERT_MAPBOX_TOKEN
+  const nextToken = hasMapboxToken ? accessToken : INERT_MAPBOX_TOKEN
   if (mapboxgl.accessToken !== nextToken) {
     mapboxgl.accessToken = nextToken
   }
