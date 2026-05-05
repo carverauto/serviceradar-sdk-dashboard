@@ -1,6 +1,6 @@
 {
   "name": "@carverauto/serviceradar-dashboard-sdk",
-  "version": "0.1.1",
+  "version": "0.1.4",
   "description": "ServiceRadar dashboard package SDK for browser module and WASM renderers.",
   "type": "module",
   "license": "UNLICENSED",
@@ -68,7 +68,7 @@
     "react-dom": ">=19.2.5"
   },
   "dependencies": {
-    "@carverauto/serviceradar-cli": "^0.1.0"
+    "@carverauto/serviceradar-cli": "^0.1.4"
   },
   "devDependencies": {
     "react": "^19.2.5",
