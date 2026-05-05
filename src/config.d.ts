@@ -38,8 +38,8 @@ export interface DashboardRendererManifestSpec {
   trust?: "trusted" | "review" | string
   entrypoint?: string
   /**
-   * The SHA256 digest is filled in by `serviceradar-dashboard build` /
-   * `serviceradar-dashboard manifest`; declarations may omit it.
+   * The SHA256 digest is filled in by `serviceradar-cli dashboard build` /
+   * `serviceradar-cli dashboard manifest`; declarations may omit it.
    */
   sha256?: string
   /**
@@ -116,7 +116,7 @@ export interface DashboardConfig {
   manifest: DashboardManifestSpec
 
   /**
-   * Renderer build options consumed by `serviceradar-dashboard build`.
+   * Renderer build options consumed by `serviceradar-cli dashboard build`.
    */
   renderer?: DashboardRendererSpec
 
