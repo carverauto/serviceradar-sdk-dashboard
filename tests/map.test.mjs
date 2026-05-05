@@ -4,7 +4,7 @@ import React from "react"
 import {renderToStaticMarkup} from "react-dom/server"
 
 import {DashboardProvider} from "../src/react.js"
-import {scatter, text, useDeckLayers, useDeckMap} from "../src/map.js"
+import {scatter, text, useDeckLayers, useDeckMap, useMapboxMap} from "../src/map.js"
 
 function makeFakeLibraries(layerConstructors) {
   const constructed = []
@@ -112,6 +112,33 @@ test("useDeckMap throws a clear error when required libraries are missing", () =
   // useEffect does not run during SSR, so the throw never fires; we instead assert the missing libs are present:
   // - the validation runs only when the effect runs in a browser. Confirm the handle object is returned without error.
   assert.equal(captured, null, "SSR pass should not throw; validation runs in client useEffect")
+})
+
+test("useMapboxMap renders without requiring deck overlay libraries", () => {
+  const {libraries} = makeFakeLibraries([])
+  delete libraries.MapboxOverlay
+
+  function Probe() {
+    const handle = useMapboxMap({initialViewState: {center: [0, 0], zoom: 1}})
+    return React.createElement("div", {ref: handle.containerRef}, String(Boolean(handle.overlay)))
+  }
+
+  let captured = null
+  let html = ""
+  try {
+    html = renderToStaticMarkup(
+      React.createElement(
+        DashboardProvider,
+        {host: {instance: {settings: {}}}, api: {libraries, mapbox: () => ({})}},
+        React.createElement(Probe),
+      ),
+    )
+  } catch (error) {
+    captured = error
+  }
+
+  assert.equal(captured, null)
+  assert.match(html, />false</)
 })
 
 test("useDeckLayers reuses layer instances when data, accessors, and visualProps refs are stable", () => {
