@@ -39,6 +39,17 @@ exposes two subcommand groups:
   with manual-token fallback. Stores credentials at
   `~/.config/serviceradar/credentials.json` (mode `0600`).
 
+`dashboard publish` posts a multipart upload to
+`/api/v1/dashboard-packages`; the bearer JWT must carry the
+`dashboard.publish` scope and the user must hold the
+`cli.dashboard.publish` RBAC permission. Same `id@version` re-pushes are
+idempotent when the renderer SHA256 matches; pushes against an enabled
+package with different bytes are rejected (409
+`version_already_published`) so operator browsers never silently fetch
+swapped renderer code. See the [dashboard-sdk publishing
+docs](https://developer.serviceradar.cloud/docs/v2/dashboard-sdk#publishing)
+for the full endpoint contract and error envelope.
+
 The legacy `serviceradar-dashboard` bin name is preserved as a transitional
 alias that prints a deprecation notice and routes to
 `serviceradar-cli dashboard *`. Removal scheduled for the release after.
