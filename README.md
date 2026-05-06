@@ -13,6 +13,18 @@ source directly.
 
 Dashboard packages should consume the SDK from npm:
 
+When bootstrapping a new dashboard package from an empty directory, initialize
+the directory first so npm treats it as the project root. Otherwise npm may walk
+up to a parent `package.json` and install/audit that parent project instead.
+
+```bash
+npm init -y
+npm prefix
+```
+
+`npm prefix` should print the dashboard package directory. If it prints a parent
+directory, create a local `package.json` or run npm with `--prefix "$PWD"`.
+
 ```bash
 npm install @carverauto/serviceradar-dashboard-sdk react react-dom
 ```
