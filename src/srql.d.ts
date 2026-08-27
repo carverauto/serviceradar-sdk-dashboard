@@ -15,6 +15,7 @@ export interface SrqlClient {
   update(query: string, frameQueries?: Record<string, string>): void
   updateQuery(query: string, frameQueries?: Record<string, string>): void
   setQuery(query: string, frameQueries?: Record<string, string>): void
+  page(frameId: string, cursor: string): void
   escapeValue(value: unknown): string
   list(values: Iterable<SrqlFilterValue>): string
   build(options?: BuildSrqlQueryOptions): string

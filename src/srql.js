@@ -36,12 +36,17 @@ export function createSrqlClient(api) {
     if (srqlUpdate) srqlUpdate(query, frameQueries)
     if (legacyUpdate && fallback.update !== api?.setSrqlQuery) legacyUpdate(query, frameQueries)
   }
+  const srqlPage = typeof fallback.page === "function" ? fallback.page.bind(fallback) : null
+  const page = (frameId, cursor) => {
+    if (srqlPage) srqlPage(frameId, cursor)
+  }
 
   return {
     query,
     update,
     updateQuery: update,
     setQuery: update,
+    page,
     escapeValue: escapeSrqlValue,
     list: srqlList,
     build: buildSrqlQuery,

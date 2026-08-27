@@ -170,6 +170,7 @@ export const mountDashboard = mountReactDashboard(NetworkMap)
 The `./react` subpath ships TypeScript declarations for the stable browser
 host contract. React dashboards can use `useDashboardFrames`,
 `useDashboardFrame`, `useDashboardTheme`, `useDashboardSrql`,
+`useDashboardFramePagination`,
 `useDashboardSettings`, `useDashboardMapbox`, `useDashboardLibraries`,
 `useDashboardCapability`, `useDashboardNavigation`,
 `useDashboardPreferences`, `useDashboardSavedQueries`, `useDashboardPopup`, and
@@ -663,6 +664,27 @@ renderer with fresh server-filtered rows. The optional `frameQueries` object can
 override individual frame IDs when a dashboard needs detail frames to use a
 different SRQL query from the primary map frame. The old `api.setSrqlQuery`
 alias remains for compatibility, but new packages should prefer `api.srql`.
+
+Row frames that can exceed the host page size should page through SRQL
+cursors instead of raising `limit:`. Do **not** put `cursor:` in the query
+string — cursors are request metadata, the same as every other SRQL entity.
+
+```js
+const paging = useDashboardFramePagination("results")
+
+if (paging.next) paging.next()
+```
+
+`api.srql.page(frameId, cursor)` re-runs **that frame only** at the signed
+cursor. The query text, dashboard URL, and other frames stay put. On a host
+that has not deployed paging yet, `page()` is a no-op so packages stay
+compatible.
+
+A `stats:` frame (`in:composite_results stats:count() as n by check,verdict`)
+is a GROUP BY, not a truncated row dump — do not page it, and do not treat a
+short result as a ceiling. Device labels for a paged results frame come from a
+second frame of `in:devices uid:(…)` with at most 200 uids, matching the SRQL
+IN-list cap.
 
 Host actions that affect ServiceRadar-owned state or shell UI stay behind
 capability checks. React packages should use the SDK hooks rather than direct
