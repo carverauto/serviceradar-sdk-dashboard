@@ -1,6 +1,6 @@
 {
   "name": "@carverauto/serviceradar-dashboard-sdk",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "ServiceRadar dashboard package SDK for browser module and WASM renderers.",
   "type": "module",
   "license": "UNLICENSED",

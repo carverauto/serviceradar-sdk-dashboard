@@ -8,6 +8,7 @@ import {
   useDashboardController,
   useDashboardDetails,
   useDashboardFrame,
+  useDashboardFramePagination,
   useDashboardFrames,
   useDashboardPopup,
   useDashboardPreferences,
@@ -70,6 +71,44 @@ test("React hooks expose preferences, saved queries, popup, and details host API
     ["popup", "DEN"],
     ["details", {type: "site", site_code: "DEN"}],
   ])
+})
+
+test("useDashboardFramePagination reads host cursors and pages without rewriting the query", () => {
+  const events = []
+  const frames = [
+    {
+      id: "results",
+      query: "in:composite_results sort:device_uid:asc limit:200",
+      limit: 200,
+      pagination: {next_cursor: "page-two", prev_cursor: null, limit: 200},
+      results: [{device_uid: "dev-1"}],
+    },
+  ]
+  const api = {
+    frames: () => frames,
+    srql: {
+      query: () => frames[0].query,
+      update() {
+        throw new Error("update must not run for page()")
+      },
+      page(frameId, cursor) {
+        events.push(["page", frameId, cursor])
+      },
+    },
+  }
+
+  function Probe() {
+    const paging = useDashboardFramePagination("results")
+    paging.next()
+    return React.createElement("span", null, `${paging.nextCursor} ${paging.limit}`)
+  }
+
+  const html = renderToStaticMarkup(
+    React.createElement(DashboardProvider, {host: {}, api}, React.createElement(Probe)),
+  )
+
+  assert.equal(html, "<span>page-two 200</span>")
+  assert.deepEqual(events, [["page", "results", "page-two"]])
 })
 
 test("React hooks fall back to instance settings for read-only saved queries and preferences", () => {

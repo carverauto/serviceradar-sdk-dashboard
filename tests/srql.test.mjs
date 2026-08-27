@@ -104,3 +104,32 @@ test("createSrqlClient does not duplicate when setSrqlQuery aliases srql.update"
 
   assert.equal(calls.length, 1)
 })
+
+test("createSrqlClient forwards page to the host without rewriting the query", () => {
+  const calls = []
+  const client = createSrqlClient({
+    srql: {
+      query: () => "in:composite_results sort:device_uid:asc limit:200",
+      page(frameId, cursor) {
+        calls.push({frameId, cursor})
+      },
+    },
+  })
+
+  client.page("results", "next-token")
+
+  assert.deepEqual(calls, [{frameId: "results", cursor: "next-token"}])
+})
+
+test("createSrqlClient.page is a no-op when the host has not deployed paging", () => {
+  const client = createSrqlClient({
+    srql: {
+      query: () => "in:composite_results limit:200",
+      update() {
+        throw new Error("update must not run")
+      },
+    },
+  })
+
+  client.page("results", "next-token")
+})

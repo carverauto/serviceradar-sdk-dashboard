@@ -228,6 +228,27 @@ export function useDashboardSrql() {
   return useMemo(() => createSrqlClient(api), [api])
 }
 
+export function useDashboardFramePagination(frameId) {
+  const frame = useDashboardFrame(frameId)
+  const srql = useDashboardSrql()
+
+  return useMemo(() => {
+    const pagination = frame?.pagination && typeof frame.pagination === "object" ? frame.pagination : {}
+    const nextCursor = pagination.next_cursor || pagination.nextCursor || null
+    const prevCursor = pagination.prev_cursor || pagination.prevCursor || null
+    const limit = Number(pagination.limit ?? frame?.limit)
+
+    return {
+      nextCursor: nextCursor ? String(nextCursor) : null,
+      prevCursor: prevCursor ? String(prevCursor) : null,
+      limit: Number.isFinite(limit) && limit > 0 ? limit : null,
+      page: (cursor) => srql.page(frameId, cursor),
+      next: nextCursor ? () => srql.page(frameId, nextCursor) : null,
+      prev: prevCursor ? () => srql.page(frameId, prevCursor) : null,
+    }
+  }, [frame, frameId, srql])
+}
+
 export function useDashboardQueryState(options = {}) {
   const srql = useDashboardSrql()
   const optionsRef = useRef(options)

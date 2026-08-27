@@ -13,6 +13,14 @@ export type DashboardTheme = "dark" | "light" | string
 
 export type DashboardFrameEncoding = "json_rows" | "arrow_ipc" | string
 
+export interface DashboardFramePagination {
+  next_cursor?: string | null
+  prev_cursor?: string | null
+  nextCursor?: string | null
+  prevCursor?: string | null
+  limit?: number | null
+}
+
 export interface DashboardFrame<Row = Record<string, unknown>> {
   id: string
   query?: string
@@ -21,6 +29,8 @@ export interface DashboardFrame<Row = Record<string, unknown>> {
   results?: Row[]
   rows?: Row[]
   row_count?: number
+  limit?: number
+  pagination?: DashboardFramePagination
   refreshed_at?: string
   generated_at?: string
   payload?: ArrayBuffer | Uint8Array | string
@@ -246,6 +256,15 @@ export function useFilterState<State = Record<string, unknown>>(
 ): UseFilterStateResult<State>
 export function useDashboardTheme(): DashboardTheme
 export function useDashboardSrql(): SrqlClient
+export interface UseDashboardFramePaginationResult {
+  nextCursor: string | null
+  prevCursor: string | null
+  limit: number | null
+  page(cursor: string): void
+  next: (() => void) | null
+  prev: (() => void) | null
+}
+export function useDashboardFramePagination(frameId: string): UseDashboardFramePaginationResult
 export interface UseDashboardQueryStateResult<State = Record<string, unknown>, Hydrated = State>
   extends DashboardQueryStateSnapshot<State> {
   apply(patch: DashboardQueryStatePatch<State>, options?: DashboardQueryStateApplyOptions): void
