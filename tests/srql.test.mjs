@@ -133,3 +133,32 @@ test("createSrqlClient.page is a no-op when the host has not deployed paging", (
 
   client.page("results", "next-token")
 })
+
+test("createSrqlClient.page throws on a missing cursor instead of falling through to update", () => {
+  const client = createSrqlClient({
+    srql: {
+      query: () => "in:composite_results limit:200",
+      update() {
+        throw new Error("update must not run")
+      },
+      page() {
+        throw new Error("host page must not run without a cursor")
+      },
+    },
+  })
+
+  assert.throws(() => client.page("results", ""), /dashboard frame page requires frame id and cursor/)
+  assert.throws(() => client.page("results"), /dashboard frame page requires frame id and cursor/)
+  assert.throws(() => client.page("", "next-token"), /dashboard frame page requires frame id and cursor/)
+})
+
+test("buildSrqlQuery does not put a cursor into the query string", () => {
+  assert.equal(
+    buildSrqlQuery({
+      entity: "composite_results",
+      limit: 200,
+      cursor: "should-not-appear",
+    }),
+    "in:composite_results limit:200",
+  )
+})

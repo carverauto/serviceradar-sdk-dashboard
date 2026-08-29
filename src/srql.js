@@ -38,7 +38,12 @@ export function createSrqlClient(api) {
   }
   const srqlPage = typeof fallback.page === "function" ? fallback.page.bind(fallback) : null
   const page = (frameId, cursor) => {
-    if (srqlPage) srqlPage(frameId, cursor)
+    const id = String(frameId || "").trim()
+    const token = String(cursor || "").trim()
+    if (!id || !token) {
+      throw new Error("dashboard frame page requires frame id and cursor")
+    }
+    if (srqlPage) srqlPage(id, token)
   }
 
   return {
