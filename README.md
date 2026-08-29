@@ -1,5 +1,7 @@
 # ServiceRadar Dashboard SDK
 
+Source of truth: https://github.com/carverauto/serviceradar-sdk-dashboard
+
 This SDK contains helpers for browser dashboard packages that target
 ServiceRadar's dashboard package host interfaces.
 
@@ -838,16 +840,17 @@ The package is published as `@carverauto/serviceradar-dashboard-sdk`. Pull reque
 pushes run `npm run ci`, which executes JavaScript tests, Go tests, and
 `npm pack --dry-run`.
 
-Release publishing is handled by GitHub Actions in the mirrored repository via
+Release publishing is handled by GitHub Actions via
 `.github/workflows/npm-publish.yml`. The workflow uses npm trusted publishing
 with GitHub OIDC, so it does not require `NPM_TOKEN`.
 
 1. Update `package.json` to the target semver.
-2. Tag the SDK repo as `v<package.json version>`, for example `v0.1.0`.
-3. Push the tag to Forgejo and let the GitHub mirror receive the same tag.
-4. Ensure npmjs.com has a trusted publisher configured for the GitHub mirror
-   repository and workflow file `.github/workflows/npm-publish.yml`.
-5. Let the tag-triggered GitHub workflow publish, or run the workflow manually
-   with the same tag.
+2. Tag the SDK repo as `v<package.json version>`, for example `v0.2.0`.
+3. Push the tag to GitHub (`git push origin v0.2.0`).
+4. Ensure npmjs.com has a trusted publisher for
+   `carverauto/serviceradar-sdk-dashboard` and workflow filename
+   `npm-publish.yml` (filename only, not a path).
+5. Let the tag-triggered GitHub workflow publish, or dispatch it with the same
+   tag.
 
 The workflow refuses to publish if the tag does not match the package version.

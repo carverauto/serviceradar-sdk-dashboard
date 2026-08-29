@@ -1,3 +1,3 @@
-module code.carverauto.dev/carverauto/serviceradar-sdk-dashboard
+module github.com/carverauto/serviceradar-sdk-dashboard
 
 go 1.23
