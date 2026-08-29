@@ -24,6 +24,9 @@ jobs:
   publish:
     name: Publish
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
     env:
       INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
       INPUT_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}
@@ -39,7 +42,6 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          registry-url: "https://registry.npmjs.org"
 
       - name: Setup Go
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5
@@ -66,15 +68,11 @@ jobs:
 
       - name: Publish package with trusted publishing
         if: ${{ env.INPUT_DRY_RUN != 'true' }}
-        env:
-          NODE_AUTH_TOKEN: ""
         run: |
           set -euo pipefail
-          # setup-node's registry-url writes an empty _authToken when no
-          # NPM_TOKEN secret exists. npm then skips OIDC and the registry
-          # returns 404. Strip that line so trusted publishing can run.
-          npmrc="${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
-          if [ -f "$npmrc" ]; then
-            sed -i '/_authToken/d' "$npmrc"
-          fi
+          npm --version
+          # Node 24 should ship npm 11.5.1+, which is the OIDC floor.
+          # Re-pin latest so a runner image with an older bundled npm still works.
+          npm install -g npm@latest
+          npm --version
           npm publish --access public --provenance
