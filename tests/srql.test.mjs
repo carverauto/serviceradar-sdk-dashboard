@@ -19,7 +19,7 @@ test("buildSrqlQuery builds deterministic renderer-owned filter queries", () => 
       where: ["down_count:>0"],
       limit: 500,
     }),
-    "in:wifi_sites site_name:%Denver\\ International% site_code:(DEN,IAH) !ap_family:(2xx,3xx) !region:(AM-East) down_count:>0 limit:500",
+    "in:wifi_sites site_name:%Denver\\ International% site_code:(DEN,SITE01) !ap_family:(2xx,3xx) !region:(AM-East) down_count:>0 limit:500",
   )
 })
 
@@ -28,7 +28,7 @@ test("escapeSrqlValue collapses whitespace for SRQL token values", () => {
 })
 
 test("srqlList omits empty values", () => {
-  assert.equal(srqlList(["DEN", "", null, "SITE01"]), "(DEN,IAH)")
+  assert.equal(srqlList(["DEN", "", null, "SITE01"]), "(DEN,SITE01)")
 })
 
 test("createSrqlClient wraps host srql API and frame query updates", () => {

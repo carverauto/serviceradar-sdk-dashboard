@@ -428,6 +428,75 @@ Available factory helpers: `scatter`, `text`, `icon`, `line`. They're thin
 wrappers that stamp the right `kind` so the spec is more readable; you can
 also write specs by hand.
 
+### Screen-space level of detail — `useScreenLod`, `screenLod`
+
+A map with thousands of points should draw clusters when zoomed out and the
+rows themselves when zoomed in. `useScreenLod` takes the rows you already
+pass to `scatter()` and `useDeckMap().viewState`, and returns the `data` to
+draw:
+
+```jsx
+import {scatter, useDeckLayers, useDeckMap, useScreenLod} from "@carverauto/serviceradar-dashboard-sdk/map"
+
+function SitesLayer({sites}) {
+  const handle = useDeckMap({viewportThrottleMs: 120})
+  const lod = useScreenLod(sites, {
+    viewState: handle.viewState,
+    getPosition: (site) => [site.longitude, site.latitude],
+    getId: (site) => site.site_code,
+    radiusPx: 40,
+    enterZoom: 6,
+    exitZoom: 4.5,
+    aggregate: (members) => ({ap_count: members.reduce((sum, site) => sum + site.ap_count, 0)}),
+  })
+
+  const accessors = useMemo(() => ({
+    getPosition: lod.positionOf,
+    getRadius: (row) => (lod.isCluster(row) ? 10 + Math.log2(row.__lod_count) * 4 : 6),
+  }), [lod.positionOf, lod.isCluster])
+
+  useDeckLayers(handle, {
+    sites: scatter("sites", {
+      data: lod.data,
+      accessors,
+      visualProps,
+      events: {
+        onClick: ({object}) => {
+          if (lod.isCluster(object)) handle.flyTo({center: lod.positionOf(object), zoom: lod.enterZoom})
+        },
+      },
+    }),
+  })
+
+  return <div ref={handle.containerRef} />
+}
+```
+
+- `band` is `"far"` or `"near"`. At or above `enterZoom` the band is near and
+  `data` is the input array itself. At or below `exitZoom` the band is far and
+  `data` holds one cluster record per cell. Between the two, the band stays
+  whatever it was, so zooming through the gap does not flicker.
+- A cluster record carries `__lod: "far"`, `__lod_id`, `__lod_count`,
+  `__lod_ids` (member ids from `getId`, default `row.id`), `__lod_position`
+  (the member mean) and whatever `aggregate(members)` returns. It never
+  copies fields from a member.
+- Cells are fixed in world pixels at `exitZoom` (`radiusPx` wide), not taken
+  from the current camera. Panning or zooming inside the far band returns the
+  same `data` reference and the same `__lod_id`s, so `useDeckLayers` keeps
+  the layer. `data` changes only when the rows or the band change.
+- `hidden` is the number of rows the clusters stand for. `unplaced` counts
+  rows whose `getPosition` was not finite. Those rows are in no cluster.
+- `positionOf(row)` returns the member mean for a cluster and `getPosition`
+  for a row. Flying to it at `enterZoom` opens the rows.
+
+`getPosition`, `getId` and `aggregate` may be inline functions. The hook reads
+them through a ref, and `positionOf` keeps one identity for the life of the
+component. Changing one of them without changing the rows does not recluster.
+
+`screenLod(rows, {view, previous, ...})` is the same logic without React.
+`view` is anything with a numeric `zoom`. Pass the previous result back as
+`previous` to keep the hysteresis and the far-band `data` reference.
+
 ### React-mounted Mapbox popups — `useMapPopup`
 
 Mapbox popups are imperative — `new mapboxgl.Popup().setHTML(...)`. To render

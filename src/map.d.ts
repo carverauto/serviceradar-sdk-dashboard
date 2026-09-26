@@ -79,3 +79,70 @@ export function line<DataItem = unknown>(
   id: string,
   spec: Omit<DeckLayerSpec<DataItem>, "id" | "kind">,
 ): DeckLayerSpec<DataItem>
+
+export type ScreenLodBand = "far" | "near"
+
+export type LngLat = [number, number]
+
+export interface ScreenLodCluster {
+  __lod: "far"
+  /** Stable id: the world-pixel cell at exitZoom. */
+  __lod_id: string
+  __lod_count: number
+  __lod_ids: unknown[]
+  /** Mean position of the members. */
+  __lod_position: LngLat
+}
+
+export type ScreenLodClusterRow<Extra extends object = {}> = Extra & ScreenLodCluster
+
+export interface ScreenLodOptions<Row, Extra extends object = {}> {
+  /** Anything with a numeric `zoom`: a useDeckMap viewState or a deck viewport. */
+  view?: {zoom: number} | null
+  getPosition(row: Row): LngLat | null | undefined
+  /** Defaults to `row.id`. */
+  getId?(row: Row): unknown
+  /** Cell size, in world pixels at exitZoom. Defaults to 40. */
+  radiusPx?: number
+  /** Zoom at or above which the input rows are drawn. */
+  enterZoom: number
+  /** Zoom at or below which clusters are drawn. Must be less than enterZoom. */
+  exitZoom: number
+  /** Extra fields for a cluster record, computed from its members. */
+  aggregate?(members: Row[]): Extra | null | undefined
+  /** The previous result: supplies hysteresis and a stable far-band `data`. */
+  previous?: ScreenLodResult<Row, Extra> | null
+}
+
+export interface UseScreenLodOptions<Row, Extra extends object = {}>
+  extends Omit<ScreenLodOptions<Row, Extra>, "view" | "previous"> {
+  /** `useDeckMap().viewState`. */
+  viewState?: {zoom: number} | null
+}
+
+export interface ScreenLodResult<Row, Extra extends object = {}> {
+  band: ScreenLodBand
+  /** Cluster records in the far band, the input rows in the near band. */
+  data: Row[] | ScreenLodClusterRow<Extra>[]
+  /** Input rows represented by clusters (0 in the near band). */
+  hidden: number
+  /** Far-band rows left out of every cluster because getPosition was not finite. */
+  unplaced: number
+  enterZoom: number
+  exitZoom: number
+  isCluster(row: unknown): row is ScreenLodClusterRow<Extra>
+  /** Member mean for a cluster, getPosition for a row. */
+  positionOf(row: Row | ScreenLodClusterRow<Extra>): LngLat | null | undefined
+}
+
+export function isLodCluster(row: unknown): row is ScreenLodCluster
+
+export function screenLod<Row, Extra extends object = {}>(
+  rows: readonly Row[] | null | undefined,
+  options: ScreenLodOptions<Row, Extra>,
+): ScreenLodResult<Row, Extra>
+
+export function useScreenLod<Row, Extra extends object = {}>(
+  rows: readonly Row[] | null | undefined,
+  options: UseScreenLodOptions<Row, Extra>,
+): ScreenLodResult<Row, Extra>
