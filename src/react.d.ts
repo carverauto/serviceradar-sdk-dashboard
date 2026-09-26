@@ -152,6 +152,7 @@ export interface DashboardApi<Row = Record<string, unknown>> {
   savedQueries?: DashboardSavedQueryApi
   popup?: DashboardPopupApi
   details?: DashboardDetailsApi
+  camera?: import("./camera.js").DashboardCameraApi
   [key: string]: unknown
 }
 

@@ -634,6 +634,46 @@ independently testable; the framework-agnostic cores
 are exposed at `/query-state`, `/filtering`, and `/popup` for non-React
 consumers.
 
+### Live camera streams — `useCameraStream`, `CameraTile`, `CameraGrid`
+
+Dashboards that declare the `camera.stream.view` capability can play camera
+relay streams. The host opens and closes the relay sessions, runs WebRTC
+signaling (falling back to the websocket WebCodecs/MSE player) and owns the
+video surfaces; the SDK attaches a host handle to a container element per tile.
+
+```js
+import {CameraGrid, cameraKey, useCameraAvailable} from "@carverauto/serviceradar-dashboard-sdk/camera"
+
+function CameraWall({cameras, selected, onSelect}) {
+  if (!useCameraAvailable()) return null
+
+  return (
+    <CameraGrid
+      cameras={cameras}            // [{camera_source_id, stream_profile_id, label}]
+      selectedKey={selected ? cameraKey(selected) : null}
+      onSelect={onSelect}
+      renderOverlay={(camera, stream) => <Hud camera={camera} state={stream.state} />}
+    />
+  )
+}
+```
+
+- A tile opens its session when it mounts and closes it when it unmounts or
+  `enabled` turns false, so hiding an overlay releases every stream it held.
+- The host caps a dashboard at nine concurrent sessions. `CameraGrid` never
+  renders more than that; a direct tenth `open` fails with state `limited`.
+- Tile states: `requesting`, `connecting`, `activating` (relay still starting),
+  `playing`, `suspended` (tab hidden; the host resumes on return),
+  `unauthorized` (viewer lacks camera permission), `limited`, `unavailable`
+  (package or host without the camera API), `failed`, `closed`.
+- The host authorizes every relay request with the viewer's own camera
+  permission; the capability only lets the package ask.
+- `useCameraStream(camera, {enabled})` returns `{ref, state, error,
+  relaySessionId, close}` for custom tiles, and `createCameraStreamController`
+  is the framework-free core behind it.
+- In the local harness, tiles render a generated test pattern so camera
+  dashboards run without a live ServiceRadar.
+
 ## Lower-Level Surfaces
 
 Trusted browser modules can render deck.gl maps directly because the host passes
