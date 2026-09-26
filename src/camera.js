@@ -119,6 +119,7 @@ export function createCameraStreamController({api, camera, onChange = () => {}})
       handle = null
       element = null
       snapshot = {state: CAMERA_STATES.CLOSED, error: null, relaySessionId: null}
+      onChange(snapshot)
     },
   }
 }

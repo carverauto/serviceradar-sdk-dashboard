@@ -82,6 +82,8 @@ test("controller opens a host handle, attaches it and follows host states", () =
   controller.close()
   assert.equal(handle.closed, true)
   assert.equal(controller.snapshot.state, CAMERA_STATES.CLOSED)
+  assert.equal(snapshots.at(-1).state, CAMERA_STATES.CLOSED)
+  assert.deepEqual(snapshots.map((snapshot) => snapshot.state), ["requesting", "playing", "closed"])
 })
 
 test("controller attaches a late element to an open handle", () => {
