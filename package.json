@@ -48,6 +48,10 @@
       "types": "./src/popup.d.ts",
       "default": "./src/popup.js"
     },
+    "./camera": {
+      "types": "./src/camera.d.ts",
+      "default": "./src/camera.js"
+    },
     "./config": {
       "types": "./src/config.d.ts",
       "default": "./src/config.js"
