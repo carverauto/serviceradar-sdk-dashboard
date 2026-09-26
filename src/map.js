@@ -285,6 +285,221 @@ export function line(id, layerSpec) {
   return {id, kind: "LineLayer", ...layerSpec}
 }
 
+const WORLD_TILE_PX = 512
+const MAX_MERCATOR_LAT = 85.051129
+const DEFAULT_LOD_RADIUS_PX = 40
+const lodResultKeys = new WeakMap()
+
+export function isLodCluster(row) {
+  return Boolean(row) && row.__lod === "far"
+}
+
+// Screen-space level of detail for a point layer. Far band: one cluster record
+// per world-pixel cell at exitZoom, so identity does not move with the camera.
+// Near band: the input rows, untouched. Pass the previous result back as
+// `options.previous` to get hysteresis and a stable far-band `data` reference.
+export function screenLod(rows, options = {}) {
+  const input = Array.isArray(rows) ? rows : []
+  const config = normalizeLodOptions(options)
+  const previous = options.previous && lodResultKeys.has(options.previous) ? options.previous : null
+  const band = nextLodBand(previous?.band, viewZoom(options.view), config)
+  const positionOf = (row) => lodPositionOf(row, config.getPosition)
+
+  let data = input
+  let hidden = 0
+  let unplaced = 0
+
+  if (band === "far") {
+    const reusable = previous?.band === "far" && sameLodKey(lodResultKeys.get(previous), input, config)
+    const clustered = reusable
+      ? {data: previous.data, hidden: previous.hidden, unplaced: previous.unplaced}
+      : clusterByWorldCell(input, config)
+    data = clustered.data
+    hidden = clustered.hidden
+    unplaced = clustered.unplaced
+  }
+
+  const result = {
+    band,
+    data,
+    hidden,
+    unplaced,
+    enterZoom: config.enterZoom,
+    exitZoom: config.exitZoom,
+    isCluster: isLodCluster,
+    positionOf,
+  }
+  lodResultKeys.set(result, {rows: input, exitZoom: config.exitZoom, radiusPx: config.radiusPx})
+  return result
+}
+
+export function useScreenLod(rows, options = {}) {
+  if (typeof options.getPosition !== "function") {
+    throw new Error("useScreenLod: getPosition(row) => [lng, lat] is required")
+  }
+
+  const previousRef = useRef(null)
+  const callbacksRef = useRef(options)
+  callbacksRef.current = options
+
+  const zoom = viewZoom(options.viewState ?? options.view)
+  const {enterZoom, exitZoom} = options
+  const radiusPx = options.radiusPx ?? DEFAULT_LOD_RADIUS_PX
+
+  // getPosition, getId and aggregate are read through a ref: authors routinely
+  // pass inline functions, and reclustering on their identity would hand
+  // useDeckLayers a new `data` array on every render. positionOf is stable for
+  // the same reason, so it can sit in a memoized accessors object.
+  const callbacks = useMemo(() => {
+    const getPosition = (row) => callbacksRef.current.getPosition(row)
+    return {
+      getPosition,
+      getId: (row) => (callbacksRef.current.getId || defaultLodId)(row),
+      aggregate: (members) => callbacksRef.current.aggregate?.(members),
+      positionOf: (row) => lodPositionOf(row, getPosition),
+    }
+  }, [])
+
+  const result = useMemo(() => {
+    const next = screenLod(rows, {
+      view: {zoom},
+      enterZoom,
+      exitZoom,
+      radiusPx,
+      getPosition: callbacks.getPosition,
+      getId: callbacks.getId,
+      aggregate: callbacks.aggregate,
+      previous: previousRef.current,
+    })
+    previousRef.current = next
+    return next
+  }, [rows, zoom, enterZoom, exitZoom, radiusPx, callbacks])
+
+  return useMemo(() => ({
+    band: result.band,
+    data: result.data,
+    hidden: result.hidden,
+    unplaced: result.unplaced,
+    enterZoom: result.enterZoom,
+    exitZoom: result.exitZoom,
+    isCluster: isLodCluster,
+    positionOf: callbacks.positionOf,
+  }), [result.band, result.data, result.hidden, result.unplaced, result.enterZoom, result.exitZoom, callbacks])
+}
+
+function normalizeLodOptions(options) {
+  const enterZoom = Number(options.enterZoom)
+  const exitZoom = Number(options.exitZoom)
+  if (!Number.isFinite(enterZoom) || !Number.isFinite(exitZoom)) {
+    throw new Error("screenLod: enterZoom and exitZoom must be finite numbers")
+  }
+  if (!(exitZoom < enterZoom)) {
+    throw new Error(`screenLod: exitZoom (${exitZoom}) must be less than enterZoom (${enterZoom})`)
+  }
+  if (typeof options.getPosition !== "function") {
+    throw new Error("screenLod: getPosition(row) => [lng, lat] is required")
+  }
+
+  const radiusPx = options.radiusPx == null ? DEFAULT_LOD_RADIUS_PX : Number(options.radiusPx)
+  if (!Number.isFinite(radiusPx) || radiusPx <= 0) {
+    throw new Error("screenLod: radiusPx must be a positive number")
+  }
+
+  return {
+    enterZoom,
+    exitZoom,
+    radiusPx,
+    getPosition: options.getPosition,
+    getId: typeof options.getId === "function" ? options.getId : defaultLodId,
+    aggregate: typeof options.aggregate === "function" ? options.aggregate : null,
+  }
+}
+
+function defaultLodId(row) {
+  return row?.id
+}
+
+function viewZoom(view) {
+  const zoom = Number(view?.zoom)
+  return Number.isFinite(zoom) ? zoom : null
+}
+
+function nextLodBand(previousBand, zoom, {enterZoom, exitZoom}) {
+  if (zoom == null) return previousBand || "near"
+  if (previousBand === "near") return zoom <= exitZoom ? "far" : "near"
+  if (previousBand === "far") return zoom >= enterZoom ? "near" : "far"
+  return zoom >= enterZoom ? "near" : "far"
+}
+
+function sameLodKey(key, rows, config) {
+  return Boolean(key)
+    && key.rows === rows
+    && key.exitZoom === config.exitZoom
+    && key.radiusPx === config.radiusPx
+}
+
+function clusterByWorldCell(rows, {exitZoom, radiusPx, getPosition, getId, aggregate}) {
+  const worldPx = WORLD_TILE_PX * 2 ** exitZoom
+  const cells = new Map()
+  let unplaced = 0
+
+  for (const row of rows) {
+    const lngLat = readLngLat(getPosition(row))
+    if (!lngLat) {
+      unplaced += 1
+      continue
+    }
+
+    const [x, y] = worldPixel(lngLat, worldPx)
+    const key = `${Math.floor(x / radiusPx)}:${Math.floor(y / radiusPx)}`
+    let cell = cells.get(key)
+    if (!cell) {
+      cell = {key, members: [], lngSum: 0, latSum: 0}
+      cells.set(key, cell)
+    }
+    cell.members.push(row)
+    cell.lngSum += lngLat[0]
+    cell.latSum += lngLat[1]
+  }
+
+  const data = []
+  for (const cell of cells.values()) {
+    const count = cell.members.length
+    const extra = aggregate ? aggregate(cell.members) : null
+    data.push({
+      ...(extra && typeof extra === "object" ? extra : {}),
+      __lod: "far",
+      __lod_id: `lod:${exitZoom}:${radiusPx}:${cell.key}`,
+      __lod_count: count,
+      __lod_ids: cell.members.map((member) => getId(member)),
+      __lod_position: [cell.lngSum / count, cell.latSum / count],
+    })
+  }
+
+  return {data, hidden: rows.length - unplaced, unplaced}
+}
+
+function lodPositionOf(row, getPosition) {
+  if (isLodCluster(row)) return row.__lod_position
+  return getPosition(row)
+}
+
+function readLngLat(position) {
+  if (!position) return null
+  const lng = Number(position[0])
+  const lat = Number(position[1])
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null
+  return [lng, lat]
+}
+
+function worldPixel([lng, lat], worldPx) {
+  const clampedLat = Math.max(-MAX_MERCATOR_LAT, Math.min(MAX_MERCATOR_LAT, lat))
+  const sinLat = Math.sin((clampedLat * Math.PI) / 180)
+  const x = ((lng + 180) / 360) * worldPx
+  const y = (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * worldPx
+  return [x, y]
+}
+
 function normalizeSpec(spec) {
   if (Array.isArray(spec)) {
     return spec.filter((entry) => entry && entry.id && entry.kind)
