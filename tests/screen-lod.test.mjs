@@ -102,12 +102,19 @@ test("screenLod conserves every placed row across clusters", () => {
 })
 
 test("screenLod reports rows without a finite position instead of dropping them silently", () => {
-  const rows = [...syntheticRows(20), {id: "no-fix", lng: null, lat: Number.NaN}]
+  const rows = [
+    ...syntheticRows(20),
+    {id: "no-fix", lng: null, lat: Number.NaN},
+    {id: "null-fix", lng: null, lat: null},
+    {id: "undefined-fix", lng: undefined, lat: undefined},
+    {id: "empty-fix", lng: "", lat: ""},
+    {id: "bool-fix", lng: false, lat: true},
+  ]
   const far = step(rows, 3, null)
 
   const total = far.data.reduce((sum, cluster) => sum + cluster.__lod_count, 0)
   assert.equal(total, 20)
-  assert.equal(far.unplaced, 1)
+  assert.equal(far.unplaced, 5)
   assert.equal(total + far.unplaced, rows.length)
 })
 

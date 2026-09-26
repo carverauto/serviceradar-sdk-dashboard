@@ -486,10 +486,17 @@ function lodPositionOf(row, getPosition) {
 
 function readLngLat(position) {
   if (!position) return null
-  const lng = Number(position[0])
-  const lat = Number(position[1])
-  if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null
+  const lng = readCoordinate(position[0])
+  const lat = readCoordinate(position[1])
+  if (lng === null || lat === null) return null
   return [lng, lat]
+}
+
+function readCoordinate(value) {
+  if (typeof value === "string" && value.trim() === "") return null
+  if (typeof value !== "number" && typeof value !== "string") return null
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
 }
 
 function worldPixel([lng, lat], worldPx) {
