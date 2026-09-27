@@ -702,11 +702,13 @@ function FaultStrip({plcUid}) {
 ```
 
 - `invoke` resolves with the terminal progress (`succeeded`, `failed`,
-  `expired`, `canceled`, `suppressed`); `invocations` holds the latest progress
-  for each invocation id.
+  `expired`, `canceled`, `suppressed`, `unknown`); `invocations` holds the
+  latest progress for each invocation id.
 - Event filters accept `log_provider`, `log_name`, `class_uid`, `device_uid`
   (one value or a list), `min_severity_id`, and up to eight scalar `metadata`
   fields. All given keys must match. A dashboard may hold eight subscriptions.
+  A `null` or `undefined` filter means "not ready" and does not subscribe; pass
+  `{}` to receive every event.
 - The local harness drives both from the fixture file: see "Harness fixtures
   for actions and live events" in the CLI README.
 
