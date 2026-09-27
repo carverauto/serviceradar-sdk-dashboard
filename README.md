@@ -428,6 +428,34 @@ Available factory helpers: `scatter`, `text`, `icon`, `line`. They're thin
 wrappers that stamp the right `kind` so the spec is more readable; you can
 also write specs by hand.
 
+### Plan views — `usePlanView`, `fitPlanBounds`
+
+For floorplans, sorter schematics and equipment halls there is no map. `usePlanView`
+draws a deck.gl canvas in plain 2D coordinates (`OrthographicView`) with no basemap
+and no Mapbox token. Its handle exposes the Deck instance as `overlay`, so the same
+`useDeckLayers` and layer factories drive it; `polygon`, `path` and `bitmap` join
+`scatter`, `text`, `icon` and `line` for rooms, conveyor runs and floorplan images.
+
+```jsx
+import {bitmap, polygon, scatter, useDeckLayers, usePlanView} from "@carverauto/serviceradar-dashboard-sdk/map"
+
+function Concourse({aps}) {
+  const plan = usePlanView({bounds: [[0, 0], [1200, 600]], onClick: (info) => select(info.object)})
+  useDeckLayers(plan, [
+    bitmap("floor", {image: "/assets/concourse-b.png", bounds: [0, 600, 1200, 0]}),
+    scatter("aps", {data: aps, accessors: {getPosition: (ap) => ap.xy}, visualProps: {radiusUnits: "pixels", getRadius: 6}}),
+  ])
+  return <div ref={plan.containerRef} style={{position: "relative", height: 480}} />
+}
+```
+
+Plan coordinates are yours (metres, image pixels); `flipY` defaults to image-style
+(y grows downward). `plan.project([x, y])` returns the screen position of a point,
+for anchoring a React popup, and `plan.fitBounds(bounds)` re-fits the view. The
+background follows the dashboard theme. `createPlanView` is the same controller
+without React. The host must inject `Deck` and `OrthographicView`; ServiceRadar
+and the CLI dev harness do.
+
 ### Screen-space level of detail — `useScreenLod`, `screenLod`
 
 A map with thousands of points should draw clusters when zoomed out and the
