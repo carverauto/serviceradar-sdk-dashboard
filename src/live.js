@@ -129,17 +129,18 @@ export function useDashboardActions({scope = "device", pluginId, enabled = true}
 
 // Calls `onEvents(events)` for live OCSF events matching `filter`. The filter
 // is compared by value, so an inline object literal does not resubscribe on
-// every render.
+// every render. A null or undefined filter means "not ready" and does not
+// subscribe; pass `{}` to receive every event.
 export function useDashboardEvents(filter, onEvents, {enabled = true} = {}) {
   const api = useDashboardApi()
   const allowed = apiAllowed(api?.events)
   const [error, setError] = useState(null)
   const callbackRef = useRef(onEvents)
   callbackRef.current = onEvents
-  const filterKey = JSON.stringify(filter || {})
+  const filterKey = JSON.stringify(filter ?? null)
 
   useEffect(() => {
-    if (!enabled || !allowed) return undefined
+    if (!enabled || !allowed || filterKey === "null") return undefined
 
     setError(null)
     const unsubscribe = subscribeDashboardEvents({
