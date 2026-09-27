@@ -92,8 +92,11 @@ export function useDashboardActions({scope = "device", pluginId, enabled = true}
   const runner = useMemo(() => createActionRunner({api, onChange: setInvocations}), [api])
 
   useEffect(() => {
+    setActions([])
+    setError(null)
+
     if (!enabled || !allowed) {
-      setActions([])
+      setLoading(false)
       return undefined
     }
 
@@ -104,7 +107,6 @@ export function useDashboardActions({scope = "device", pluginId, enabled = true}
       .then((list) => {
         if (!cancelled) {
           setActions(Array.isArray(list) ? list : [])
-          setError(null)
         }
       })
       .catch((reason) => {
