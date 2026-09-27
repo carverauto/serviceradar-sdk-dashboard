@@ -441,9 +441,19 @@ import {bitmap, polygon, scatter, useDeckLayers, usePlanView} from "@carverauto/
 
 function Concourse({aps}) {
   const plan = usePlanView({bounds: [[0, 0], [1200, 600]], onClick: (info) => select(info.object)})
+  const floorProps = useMemo(() => ({
+    image: "/assets/concourse-b.png",
+    bounds: [0, 600, 1200, 0],
+  }), [])
+  const accessors = useMemo(() => ({getPosition: (ap) => ap.xy}), [])
+  const visualProps = useMemo(() => ({
+    pickable: true,
+    radiusUnits: "pixels",
+    getRadius: 6,
+  }), [])
   useDeckLayers(plan, [
-    bitmap("floor", {image: "/assets/concourse-b.png", bounds: [0, 600, 1200, 0]}),
-    scatter("aps", {data: aps, accessors: {getPosition: (ap) => ap.xy}, visualProps: {radiusUnits: "pixels", getRadius: 6}}),
+    bitmap("floor", {visualProps: floorProps}),
+    scatter("aps", {data: aps, accessors, visualProps}),
   ])
   return <div ref={plan.containerRef} style={{position: "relative", height: 480}} />
 }

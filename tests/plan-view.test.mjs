@@ -6,17 +6,22 @@ import {renderToStaticMarkup} from "react-dom/server"
 import {DashboardProvider} from "../src/react.js"
 import {bitmap, createPlanView, fitPlanBounds, path, polygon, usePlanView} from "../src/map.js"
 
-function fakeLibraries() {
+function fakeLibraries({canvas = null} = {}) {
   const decks = []
 
   class FakeDeck {
     constructor(props) {
       this.props = props
+      this.canvas = canvas
       this.finalized = false
+      if (canvas && props.style) Object.assign(canvas.style, props.style)
       decks.push(this)
     }
     setProps(next) {
       this.props = {...this.props, ...next}
+    }
+    getCanvas() {
+      return this.canvas
     }
     getViewports() {
       return [{project: ([x, y]) => [x * 2, y * 2]}]
@@ -45,7 +50,8 @@ test("fitPlanBounds centres the bounds and zooms to the tighter axis", () => {
 })
 
 test("createPlanView builds an orthographic deck with a themed background and no basemap", () => {
-  const {libraries, decks} = fakeLibraries()
+  const canvas = {style: {}}
+  const {libraries, decks} = fakeLibraries({canvas})
   const plan = createPlanView({libraries, container, theme: "dark", options: {bounds: [[0, 0], [100, 100]], padding: 0}})
 
   assert.equal(decks.length, 1)
@@ -53,15 +59,44 @@ test("createPlanView builds an orthographic deck with a themed background and no
   assert.equal(deck.props.parent, container)
   assert.equal(deck.props.views.opts.flipY, true)
   assert.equal(deck.props.style.background, "#0f172a")
+  assert.equal(canvas.style.background, "#0f172a")
   assert.deepEqual(deck.props.layers, [])
   assert.deepEqual(plan.viewState, {target: [50, 50, 0], zoom: 1})
 
   plan.setTheme("light")
   assert.equal(deck.props.style.background, "#f8fafc")
+  assert.equal(canvas.style.background, "#f8fafc")
   assert.deepEqual(plan.project([3, 4]), [6, 8])
 
   plan.destroy()
   assert.equal(deck.finalized, true)
+})
+
+test("setTheme paints the container when the deck canvas is not ready", () => {
+  const {libraries} = fakeLibraries()
+  const host = {clientWidth: 400, clientHeight: 200, style: {background: ""}}
+  const plan = createPlanView({libraries, container: host, theme: "light"})
+
+  plan.setTheme("dark")
+  assert.equal(host.style.background, "#0f172a")
+  plan.destroy()
+})
+
+test("plan click and tooltip call the callbacks currently on options", () => {
+  const {libraries, decks} = fakeLibraries()
+  const seen = []
+  const options = {
+    onClick: () => seen.push("a"),
+    getTooltip: () => "a",
+  }
+  createPlanView({libraries, container, options})
+
+  options.onClick = (info) => seen.push(info.object)
+  options.getTooltip = () => "b"
+  decks[0].props.onClick({object: "b"}, null)
+
+  assert.deepEqual(seen, ["b"])
+  assert.equal(decks[0].props.getTooltip({}), "b")
 })
 
 test("createPlanView reports pan and zoom through onViewStateChange", () => {

@@ -352,8 +352,8 @@ export function createPlanView({libraries = {}, container, theme = "light", opti
     controller: options.controller ?? true,
     layers: [],
     style: {background: planBackground(theme)},
-    getTooltip: options.getTooltip,
-    onClick: options.onClick,
+    getTooltip: (...args) => options.getTooltip?.(...args),
+    onClick: (...args) => options.onClick?.(...args),
     onViewStateChange: ({viewState: next}) => {
       viewState = next
       onViewStateChange?.(next)
@@ -367,7 +367,14 @@ export function createPlanView({libraries = {}, container, theme = "light", opti
       return viewState
     },
     setTheme(nextTheme) {
-      deck.setProps({style: {background: planBackground(nextTheme)}})
+      const background = planBackground(nextTheme)
+      deck.setProps({style: {background}})
+      const canvas = typeof deck.getCanvas === "function" ? deck.getCanvas() : null
+      if (canvas) {
+        canvas.style.background = background
+      } else if (container.style) {
+        container.style.background = background
+      }
     },
     fitBounds(bounds, padding = options.padding) {
       viewState = fitPlanBounds(bounds, {width: container.clientWidth, height: container.clientHeight, padding})
@@ -408,7 +415,11 @@ export function usePlanView(options = {}) {
       libraries,
       container,
       theme,
-      options: optionsRef.current,
+      options: {
+        ...optionsRef.current,
+        onClick: (...args) => optionsRef.current.onClick?.(...args),
+        getTooltip: (...args) => optionsRef.current.getTooltip?.(...args),
+      },
       onViewStateChange: setViewState,
     })
     controllerRef.current = controller
