@@ -52,6 +52,10 @@
       "types": "./src/camera.d.ts",
       "default": "./src/camera.js"
     },
+    "./live": {
+      "types": "./src/live.d.ts",
+      "default": "./src/live.js"
+    },
     "./config": {
       "types": "./src/config.d.ts",
       "default": "./src/config.js"
