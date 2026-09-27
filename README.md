@@ -674,6 +674,42 @@ function CameraWall({cameras, selected, onSelect}) {
 - In the local harness, tiles render a generated test pattern so camera
   dashboards run without a live ServiceRadar.
 
+### Actions and live events — `useDashboardActions`, `useDashboardEvents`, `useFrameRefresh`
+
+Dashboards that declare `actions.invoke` can list and run the plugin actions the
+viewer may launch; those that declare `events.subscribe` receive live OCSF
+events as soon as they are persisted. The host runs every action through the
+northbound action model (RBAC, audit, action history with the viewer as actor)
+and re-checks event access while it streams, so the package never gets more
+than the viewer could do in ServiceRadar itself.
+
+```jsx
+import {useDashboardActions, useDashboardEvents, useFrameRefresh} from "@carverauto/serviceradar-dashboard-sdk/live"
+
+function FaultStrip({plcUid}) {
+  const refresh = useFrameRefresh()
+  const {actions, invoke, invocations} = useDashboardActions({scope: "device", pluginId: "demo-ot-plc"})
+
+  // Refresh frames the moment a matching event lands instead of on the next poll.
+  useDashboardEvents({log_provider: "plugin:demo-ot-plc", min_severity_id: 3}, () => refresh())
+
+  return actions.map((action) => (
+    <button key={action.id} onClick={() => invoke({actionId: action.id, targets: [{deviceUid: plcUid}]})}>
+      {action.label}
+    </button>
+  ))
+}
+```
+
+- `invoke` resolves with the terminal progress (`succeeded`, `failed`,
+  `expired`, `canceled`, `suppressed`); `invocations` holds the latest progress
+  for each invocation id.
+- Event filters accept `log_provider`, `log_name`, `class_uid`, `device_uid`
+  (one value or a list), `min_severity_id`, and up to eight scalar `metadata`
+  fields. All given keys must match. A dashboard may hold eight subscriptions.
+- The local harness drives both from the fixture file: see "Harness fixtures
+  for actions and live events" in the CLI README.
+
 ## Lower-Level Surfaces
 
 Trusted browser modules can render deck.gl maps directly because the host passes

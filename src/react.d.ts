@@ -153,6 +153,9 @@ export interface DashboardApi<Row = Record<string, unknown>> {
   popup?: DashboardPopupApi
   details?: DashboardDetailsApi
   camera?: import("./camera.js").DashboardCameraApi
+  actions?: import("./live.js").DashboardActionsApi
+  events?: import("./live.js").DashboardEventsApi
+  refreshFrames?(): Promise<{refreshed: boolean; reason?: string}>
   [key: string]: unknown
 }
 
