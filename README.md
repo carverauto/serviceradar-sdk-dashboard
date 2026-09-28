@@ -1030,8 +1030,8 @@ Release publishing is handled by GitHub Actions via
 with GitHub OIDC, so it does not require `NPM_TOKEN`.
 
 1. Update `package.json` to the target semver.
-2. Tag the SDK repo as `v<package.json version>`, for example `v0.2.0`.
-3. Push the tag to GitHub (`git push origin v0.2.0`).
+2. Tag the SDK repo as `v<package.json version>`.
+3. Push the tag to GitHub (`git push origin "v$(node -p 'require("./package.json").version')"`).
 4. Ensure npmjs.com has a trusted publisher for
    `carverauto/serviceradar-sdk-dashboard` and workflow filename
    `npm-publish.yml` (filename only, not a path).
