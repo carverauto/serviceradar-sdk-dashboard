@@ -424,9 +424,9 @@ reflect what actually drives rendering.
 `handle` exposes `{containerRef, ready, viewState, map, overlay, flyTo}`. Use
 `flyTo({center, zoom})` for sidebar-driven map navigation.
 
-Available factory helpers: `scatter`, `text`, `icon`, `line`. They're thin
-wrappers that stamp the right `kind` so the spec is more readable; you can
-also write specs by hand.
+Available factory helpers: `scatter`, `text`, `icon`, `line`, `polygon`,
+`path` and `bitmap`. They're thin wrappers that stamp the right `kind` so the
+spec is more readable; you can also write specs by hand.
 
 ### Plan views — `usePlanView`, `fitPlanBounds`
 
@@ -437,7 +437,7 @@ and no Mapbox token. Its handle exposes the Deck instance as `overlay`, so the s
 `scatter`, `text`, `icon` and `line` for rooms, conveyor runs and floorplan images.
 
 ```jsx
-import {bitmap, polygon, scatter, useDeckLayers, usePlanView} from "@carverauto/serviceradar-dashboard-sdk/map"
+import {bitmap, scatter, useDeckLayers, usePlanView} from "@carverauto/serviceradar-dashboard-sdk/map"
 
 function Concourse({aps}) {
   const plan = usePlanView({bounds: [[0, 0], [1200, 600]], onClick: (info) => select(info.object)})
