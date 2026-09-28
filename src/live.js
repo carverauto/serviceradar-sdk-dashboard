@@ -148,7 +148,7 @@ export function createActionRunner({api, onChange = () => {}, onConfirmationChan
 }
 
 // Framework-free subscription behind useDashboardEvents. Returns an
-// unsubscribe function, or null when the host has no events API.
+// unsubscribe function, or null when the capability is undeclared or the host has no events API.
 export function subscribeDashboardEvents({api, filter = {}, onEvents, onError = () => {}}) {
   const error = capabilityError(api, "events", "subscribe", EVENTS_SUBSCRIBE_CAPABILITY)
   if (error) {

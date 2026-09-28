@@ -221,6 +221,6 @@ export declare function useDashboardEvents(
   filter: DashboardEventFilter | null | undefined,
   onEvents: (events: DashboardEvent[]) => void,
   options?: {enabled?: boolean},
-): {allowed: boolean; error: (Error & {code?: string}) | null}
+): {allowed: boolean; /** A DashboardCapabilityError when the manifest lacks `events.subscribe`. */ error: (Error & {code?: string}) | null}
 
 export declare function useFrameRefresh(): () => Promise<{refreshed: boolean; reason?: string}>
