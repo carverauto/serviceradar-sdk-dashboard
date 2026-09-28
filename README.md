@@ -747,8 +747,59 @@ function FaultStrip({plcUid}) {
   fields. All given keys must match. A dashboard may hold eight subscriptions.
   A `null` or `undefined` filter means "not ready" and does not subscribe; pass
   `{}` to receive every event.
+- Without the capability in the manifest, `invoke` and the action list reject
+  with a `DashboardCapabilityError` (`code: "capability_denied"`), the hook's
+  `error` is set, and `useDashboardEvents` reports the same error instead of
+  subscribing.
 - The local harness drives both from the fixture file: see "Harness fixtures
   for actions and live events" in the CLI README.
+
+#### Actions that require confirmation
+
+An action whose descriptor has `requires_confirmation: true` (see
+`actionRequiresConfirmation(action)`) is never dispatched on the dashboard's
+say-so. The host holds the invoke, shows its own confirmation dialog outside
+the dashboard renderer (action label, safety classification, targets and
+input), and dispatches only after the operator confirms there. A confirmation
+is bound to the viewer, the action, the exact target set and the input, is
+single use, and expires after a short time. Do not draw your own "are you
+sure?" dialog in front of it: it proves nothing to the host and asks twice.
+
+```jsx
+import {ActionConfirmationDeclinedError, useDashboardActions} from "@carverauto/serviceradar-dashboard-sdk/live"
+
+function RebootButton({action, deviceUid}) {
+  const {invoke, pendingConfirmation} = useDashboardActions({scope: "device"})
+  const [note, setNote] = React.useState(null)
+
+  const run = () =>
+    invoke({actionId: action.id, targets: [{deviceUid}]})
+      .then((progress) => setNote(progress.state))
+      .catch((error) => {
+        // Declined, expired or refused by the host: nothing was dispatched.
+        if (error instanceof ActionConfirmationDeclinedError) setNote(`not run (${error.reason})`)
+        else setNote(error.message)
+      })
+
+  return (
+    <button disabled={Boolean(pendingConfirmation)} onClick={run}>
+      {pendingConfirmation ? "Waiting for confirmation..." : action.label}
+      {note && ` - ${note}`}
+    </button>
+  )
+}
+```
+
+- While the host dialog is open, `invoke` stays pending and
+  `pendingConfirmation` is the waiting `{confirmation_id, action_id, state:
+  "pending", expires_in_ms}`. `confirmations` maps every confirmation id to its
+  latest state; `declinedConfirmation` is the most recent one that ended
+  `declined`, `expired` or `rejected`.
+- `invoke(request, {onConfirmation})` receives the same updates for one call.
+- `ActionConfirmationDeclinedError` carries `reason` (`"declined"`,
+  `"expired"`, `"rejected"`), `code` (`confirmation_<reason>`), `actionId` and
+  `confirmationId`.
+- Actions without `requires_confirmation` dispatch immediately, as before.
 
 ## Lower-Level Surfaces
 
