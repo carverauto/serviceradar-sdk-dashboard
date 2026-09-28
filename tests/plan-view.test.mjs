@@ -6,7 +6,7 @@ import {renderToStaticMarkup} from "react-dom/server"
 import {DashboardProvider} from "../src/react.js"
 import {bitmap, createPlanView, fitPlanBounds, path, polygon, usePlanView} from "../src/map.js"
 
-function fakeLibraries({canvas = null} = {}) {
+function fakeLibraries({canvas = null, initialized = true} = {}) {
   const decks = []
 
   class FakeDeck {
@@ -14,6 +14,7 @@ function fakeLibraries({canvas = null} = {}) {
       this.props = props
       this.canvas = canvas
       this.finalized = false
+      this.isInitialized = initialized
       if (canvas && props.style) Object.assign(canvas.style, props.style)
       decks.push(this)
     }
@@ -24,6 +25,7 @@ function fakeLibraries({canvas = null} = {}) {
       return this.canvas
     }
     getViewports() {
+      if (!this.isInitialized) throw new Error("view manager is not ready")
       return [{project: ([x, y]) => [x * 2, y * 2]}]
     }
     finalize() {
@@ -61,6 +63,8 @@ test("createPlanView builds an orthographic deck with a themed background and no
   assert.equal(deck.props.style.background, "#0f172a")
   assert.equal(canvas.style.background, "#0f172a")
   assert.deepEqual(deck.props.layers, [])
+  assert.deepEqual(deck.props.viewState, {target: [50, 50, 0], zoom: 1})
+  assert.equal("initialViewState" in deck.props, false)
   assert.deepEqual(plan.viewState, {target: [50, 50, 0], zoom: 1})
 
   plan.setTheme("light")
@@ -82,6 +86,15 @@ test("setTheme paints the container when the deck canvas is not ready", () => {
   plan.destroy()
 })
 
+test("project returns null before deck finishes initialization", () => {
+  const {libraries, decks} = fakeLibraries({initialized: false})
+  const plan = createPlanView({libraries, container})
+
+  assert.equal(plan.project([3, 4]), null)
+  decks[0].isInitialized = true
+  assert.deepEqual(plan.project([3, 4]), [6, 8])
+})
+
 test("plan click and tooltip call the callbacks currently on options", () => {
   const {libraries, decks} = fakeLibraries()
   const seen = []
@@ -99,13 +112,24 @@ test("plan click and tooltip call the callbacks currently on options", () => {
   assert.equal(decks[0].props.getTooltip({}), "b")
 })
 
-test("createPlanView reports pan and zoom through onViewStateChange", () => {
+test("createPlanView keeps deck controlled after pan and fitBounds", () => {
   const {libraries, decks} = fakeLibraries()
   const seen = []
-  createPlanView({libraries, container, onViewStateChange: (view) => seen.push(view)})
+  const plan = createPlanView({
+    libraries,
+    container,
+    options: {bounds: [[0, 0], [100, 100]], padding: 0},
+    onViewStateChange: (view) => seen.push(view),
+  })
 
   decks[0].props.onViewStateChange({viewState: {target: [1, 2, 0], zoom: 3}})
-  assert.deepEqual(seen, [{target: [1, 2, 0], zoom: 3}])
+  assert.deepEqual(decks[0].props.viewState, {target: [1, 2, 0], zoom: 3})
+  assert.deepEqual(plan.viewState, {target: [1, 2, 0], zoom: 3})
+
+  const fitted = plan.fitBounds([[0, 0], [100, 100]], 0)
+  assert.deepEqual(fitted, {target: [50, 50, 0], zoom: 1})
+  assert.deepEqual(decks[0].props.viewState, {target: [50, 50, 0], zoom: 1})
+  assert.deepEqual(seen, [{target: [1, 2, 0], zoom: 3}, {target: [50, 50, 0], zoom: 1}])
 })
 
 test("createPlanView names the missing host libraries", () => {

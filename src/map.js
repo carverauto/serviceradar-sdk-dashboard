@@ -345,10 +345,11 @@ export function createPlanView({libraries = {}, container, theme = "light", opti
     })
   }
 
-  const deck = new Deck({
+  let deck
+  deck = new Deck({
     parent: container,
     views: new OrthographicView({id: "plan", flipY: options.flipY !== false}),
-    initialViewState: viewState,
+    viewState,
     controller: options.controller ?? true,
     layers: [],
     style: {background: planBackground(theme)},
@@ -356,6 +357,7 @@ export function createPlanView({libraries = {}, container, theme = "light", opti
     onClick: (...args) => options.onClick?.(...args),
     onViewStateChange: ({viewState: next}) => {
       viewState = next
+      deck?.setProps({viewState})
       onViewStateChange?.(next)
       return next
     },
@@ -378,12 +380,13 @@ export function createPlanView({libraries = {}, container, theme = "light", opti
     },
     fitBounds(bounds, padding = options.padding) {
       viewState = fitPlanBounds(bounds, {width: container.clientWidth, height: container.clientHeight, padding})
-      deck.setProps({initialViewState: viewState})
+      deck.setProps({viewState})
       onViewStateChange?.(viewState)
       return viewState
     },
     // Screen position of a plan coordinate, for anchoring React popups.
     project(point) {
+      if (deck.isInitialized !== true) return null
       const viewport = deck.getViewports?.()[0]
       return viewport ? viewport.project(point) : null
     },
