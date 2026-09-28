@@ -269,6 +269,7 @@ export function useDashboardEvents(filter, onEvents, {enabled = true} = {}) {
   const filterKey = JSON.stringify(filter ?? null)
 
   useEffect(() => {
+    setError(null)
     if (enabled && !declared) {
       setError(new DashboardCapabilityError(EVENTS_SUBSCRIBE_CAPABILITY))
       return undefined
@@ -276,7 +277,6 @@ export function useDashboardEvents(filter, onEvents, {enabled = true} = {}) {
 
     if (!enabled || !allowed || filterKey === "null") return undefined
 
-    setError(null)
     const unsubscribe = subscribeDashboardEvents({
       api,
       filter: JSON.parse(filterKey),
