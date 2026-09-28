@@ -59,7 +59,7 @@ export function useDeckMap<Container extends Element = HTMLDivElement>(
 ): DeckMapHandle<Container>
 
 export function useDeckLayers(
-  handle: DeckMapHandle | undefined,
+  handle: DeckMapHandle | PlanViewHandle | undefined,
   spec: DeckLayerSpec[] | DeckLayerMap | null | undefined,
 ): unknown[]
 
@@ -79,6 +79,80 @@ export function line<DataItem = unknown>(
   id: string,
   spec: Omit<DeckLayerSpec<DataItem>, "id" | "kind">,
 ): DeckLayerSpec<DataItem>
+export function polygon<DataItem = unknown>(
+  id: string,
+  spec: Omit<DeckLayerSpec<DataItem>, "id" | "kind">,
+): DeckLayerSpec<DataItem>
+export function path<DataItem = unknown>(
+  id: string,
+  spec: Omit<DeckLayerSpec<DataItem>, "id" | "kind">,
+): DeckLayerSpec<DataItem>
+export function bitmap<DataItem = unknown>(
+  id: string,
+  spec: Omit<DeckLayerSpec<DataItem>, "id" | "kind">,
+): DeckLayerSpec<DataItem>
+
+/** A point in plan coordinates (for example metres or pixels of a floorplan image). */
+export type PlanPoint = [number, number]
+export type PlanBounds = [PlanPoint, PlanPoint]
+
+export interface PlanViewState {
+  target: [number, number, number]
+  zoom: number
+}
+
+export interface PlanViewOptions {
+  /** Starting view; ignored when `bounds` is given and the container has a size. */
+  initialViewState?: Partial<PlanViewState>
+  /** Fit these plan-coordinate bounds on first render. */
+  bounds?: PlanBounds
+  /** Pixels of padding when fitting bounds. Default 16. */
+  padding?: number
+  /** Y grows downward (image-style) unless false. Default true. */
+  flipY?: boolean
+  /** deck.gl controller setting; pan/zoom enabled by default. */
+  controller?: boolean | Record<string, unknown>
+  getTooltip?: (info: unknown) => unknown
+  onClick?: (info: unknown, event: unknown) => void
+}
+
+export interface PlanViewHandle<Container extends Element = HTMLDivElement> {
+  containerRef: RefObject<Container>
+  ready: boolean
+  viewState: PlanViewState
+  /** The Deck instance; `useDeckLayers` sets its layers. */
+  readonly overlay: unknown | null
+  fitBounds(bounds: PlanBounds, padding?: number): PlanViewState | undefined
+  /** Screen pixel position of a plan coordinate, for anchoring popups. */
+  project(point: PlanPoint): [number, number] | null
+}
+
+export interface PlanViewController {
+  readonly deck: unknown
+  readonly viewState: PlanViewState
+  setTheme(theme: "light" | "dark" | string): void
+  fitBounds(bounds: PlanBounds, padding?: number): PlanViewState
+  project(point: PlanPoint): [number, number] | null
+  destroy(): void
+}
+
+export function fitPlanBounds(
+  bounds: PlanBounds,
+  size: {width: number; height: number; padding?: number},
+): PlanViewState
+
+export function createPlanView(input: {
+  libraries: Record<string, unknown>
+  container: Element & {clientWidth: number; clientHeight: number}
+  theme?: string
+  options?: PlanViewOptions
+  onViewStateChange?: (viewState: PlanViewState) => void
+}): PlanViewController
+
+/** A deck.gl canvas in plain 2D coordinates, with no basemap or Mapbox token. */
+export function usePlanView<Container extends Element = HTMLDivElement>(
+  options?: PlanViewOptions,
+): PlanViewHandle<Container>
 
 export type ScreenLodBand = "far" | "near"
 

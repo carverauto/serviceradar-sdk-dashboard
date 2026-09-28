@@ -285,6 +285,174 @@ export function line(id, layerSpec) {
   return {id, kind: "LineLayer", ...layerSpec}
 }
 
+export function polygon(id, layerSpec) {
+  return {id, kind: "PolygonLayer", ...layerSpec}
+}
+
+export function path(id, layerSpec) {
+  return {id, kind: "PathLayer", ...layerSpec}
+}
+
+export function bitmap(id, layerSpec) {
+  return {id, kind: "BitmapLayer", ...layerSpec}
+}
+
+// ---------------------------------------------------------------------------
+// Plan view: a deck.gl canvas in plain 2D coordinates (OrthographicView) for
+// floorplans, sorter schematics and hall layouts. No basemap and no Mapbox
+// token. The handle exposes the Deck instance as `overlay`, so the same
+// `useDeckLayers(handle, spec)` and layer factories drive it.
+// ---------------------------------------------------------------------------
+
+const PLAN_BACKGROUND = Object.freeze({dark: "#0f172a", light: "#f8fafc"})
+const DEFAULT_PLAN_VIEW_STATE = Object.freeze({target: [0, 0, 0], zoom: 0})
+
+/**
+ * View state that fits `bounds` ([[minX, minY], [maxX, maxY]]) inside a
+ * `width` x `height` pixel canvas with `padding` pixels on each side.
+ */
+export function fitPlanBounds(bounds, {width, height, padding = 16} = {}) {
+  const [[minX, minY], [maxX, maxY]] = bounds
+  const spanX = Math.max(maxX - minX, 1e-9)
+  const spanY = Math.max(maxY - minY, 1e-9)
+  const usableW = Math.max((width || 1) - padding * 2, 1)
+  const usableH = Math.max((height || 1) - padding * 2, 1)
+  const scale = Math.min(usableW / spanX, usableH / spanY)
+
+  return {
+    target: [(minX + maxX) / 2, (minY + maxY) / 2, 0],
+    zoom: Math.log2(scale),
+  }
+}
+
+/**
+ * Framework-free plan-view controller. `usePlanView` wraps it; use it directly
+ * outside React.
+ */
+export function createPlanView({libraries = {}, container, theme = "light", options = {}, onViewStateChange} = {}) {
+  const {Deck, OrthographicView} = libraries
+  if (!Deck || !OrthographicView) {
+    throw new Error("usePlanView: missing host libraries (Deck, OrthographicView). The host must inject @deck.gl/core.")
+  }
+  if (!container) throw new Error("usePlanView: a container element is required")
+
+  let viewState = {...DEFAULT_PLAN_VIEW_STATE, ...(options.initialViewState || {})}
+  if (options.bounds && container.clientWidth && container.clientHeight) {
+    viewState = fitPlanBounds(options.bounds, {
+      width: container.clientWidth,
+      height: container.clientHeight,
+      padding: options.padding,
+    })
+  }
+
+  let deck
+  deck = new Deck({
+    parent: container,
+    views: new OrthographicView({id: "plan", flipY: options.flipY !== false}),
+    viewState,
+    controller: options.controller ?? true,
+    layers: [],
+    style: {background: planBackground(theme)},
+    getTooltip: (...args) => options.getTooltip?.(...args),
+    onClick: (...args) => options.onClick?.(...args),
+    onViewStateChange: ({viewState: next}) => {
+      viewState = next
+      deck?.setProps({viewState})
+      onViewStateChange?.(next)
+      return next
+    },
+  })
+
+  return {
+    deck,
+    get viewState() {
+      return viewState
+    },
+    setTheme(nextTheme) {
+      const background = planBackground(nextTheme)
+      deck.setProps({style: {background}})
+      const canvas = typeof deck.getCanvas === "function" ? deck.getCanvas() : null
+      if (canvas) {
+        canvas.style.background = background
+      } else if (container.style) {
+        container.style.background = background
+      }
+    },
+    fitBounds(bounds, padding = options.padding) {
+      viewState = fitPlanBounds(bounds, {width: container.clientWidth, height: container.clientHeight, padding})
+      deck.setProps({viewState})
+      onViewStateChange?.(viewState)
+      return viewState
+    },
+    // Screen position of a plan coordinate, for anchoring React popups.
+    project(point) {
+      if (deck.isInitialized !== true) return null
+      const viewport = deck.getViewports?.()[0]
+      return viewport ? viewport.project(point) : null
+    },
+    destroy() {
+      deck.finalize()
+    },
+  }
+}
+
+function planBackground(theme) {
+  return theme === "dark" ? PLAN_BACKGROUND.dark : PLAN_BACKGROUND.light
+}
+
+export function usePlanView(options = {}) {
+  const libraries = useDashboardLibraries()
+  const theme = useDashboardTheme()
+  const containerRef = useRef(null)
+  const controllerRef = useRef(null)
+  const optionsRef = useRef(options)
+  optionsRef.current = options
+  const [version, setVersion] = useState(0)
+  const [viewState, setViewState] = useState(() => ({...DEFAULT_PLAN_VIEW_STATE, ...(options.initialViewState || {})}))
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return undefined
+
+    const controller = createPlanView({
+      libraries,
+      container,
+      theme,
+      options: {
+        ...optionsRef.current,
+        onClick: (...args) => optionsRef.current.onClick?.(...args),
+        getTooltip: (...args) => optionsRef.current.getTooltip?.(...args),
+      },
+      onViewStateChange: setViewState,
+    })
+    controllerRef.current = controller
+    setViewState(controller.viewState)
+    setVersion((value) => value + 1)
+
+    return () => {
+      controller.destroy()
+      controllerRef.current = null
+      setVersion((value) => value + 1)
+    }
+    // Theme changes restyle the existing canvas below instead of rebuilding it.
+  }, [libraries.Deck, libraries.OrthographicView])
+
+  useEffect(() => {
+    controllerRef.current?.setTheme(theme)
+  }, [theme, version])
+
+  return useMemo(() => ({
+    containerRef,
+    ready: Boolean(controllerRef.current),
+    viewState,
+    get overlay() {
+      return controllerRef.current?.deck || null
+    },
+    fitBounds: (bounds, padding) => controllerRef.current?.fitBounds(bounds, padding),
+    project: (point) => controllerRef.current?.project(point) ?? null,
+  }), [version, viewState])
+}
+
 const WORLD_TILE_PX = 512
 const MAX_MERCATOR_LAT = 85.051129
 const DEFAULT_LOD_RADIUS_PX = 40
