@@ -35,6 +35,7 @@ export function useMapboxMap(options = {}) {
   const optionsRef = useRef(options)
   optionsRef.current = options
   const appliedStyleSignatureRef = useRef(null)
+  const tokenWarningFiredRef = useRef(false)
 
   const [ready, setReady] = useState(false)
   const [viewState, setViewState] = useState(() => normalizeViewState(options.initialViewState))
@@ -48,6 +49,22 @@ export function useMapboxMap(options = {}) {
     }
   }, [mapboxgl])
 
+  // Dev-mode: warn once when no Mapbox token is available. The host only injects a token when
+  // the dashboard manifest declares the "map.basemap.read" capability. Without the capability,
+  // api.mapbox() returns {}, hasMapboxToken is false, and any Mapbox-hosted style will fail
+  // to load. Non-Mapbox styles still load but may flicker if the token later becomes available
+  // and applyMapboxToken fires after tiles have already been drawn.
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "production" && !hasMapboxToken && !tokenWarningFiredRef.current) {
+      tokenWarningFiredRef.current = true
+      console.warn(
+        'useMapboxMap: no Mapbox access token is available from api.mapbox(). ' +
+        'Add "map.basemap.read" to your dashboard manifest capabilities so the host can provide one. ' +
+        'Mapbox-hosted styles will not load without it.'
+      )
+    }
+  }, [hasMapboxToken])
+
   useEffect(() => {
     const node = containerRef.current
     if (!node) return undefined
@@ -58,7 +75,9 @@ export function useMapboxMap(options = {}) {
     const initialStyle = pickStyle(optionsRef.current.style, mapbox, theme, {hasAccessToken: hasMapboxToken})
     const styleNeedsMapboxToken = styleRequiresMapboxToken(initialStyle)
 
-    applyMapboxToken(mapboxgl, {accessToken, hasMapboxToken, styleNeedsMapboxToken})
+    if (styleNeedsMapboxToken) {
+      applyMapboxToken(mapboxgl, {accessToken, hasMapboxToken, styleNeedsMapboxToken})
+    }
 
     appliedStyleSignatureRef.current = styleSignature(initialStyle)
 
@@ -119,7 +138,16 @@ export function useMapboxMap(options = {}) {
 
     const desiredStyle = pickStyle(options.style, mapbox, theme, {hasAccessToken: hasMapboxToken})
     const styleNeedsMapboxToken = styleRequiresMapboxToken(desiredStyle)
-    applyMapboxToken(mapboxgl, {accessToken, hasMapboxToken, styleNeedsMapboxToken})
+
+    // Only update the global mapboxgl.accessToken when the active style actually uses
+    // Mapbox-hosted tiles. Setting the global token for non-Mapbox tile sources (e.g. Carto
+    // raster, custom HTTPS sources) causes Mapbox GL JS to invalidate its internal tile state,
+    // which clears already-loaded tiles from the canvas even though the token change is a no-op
+    // for those sources. The map-creation effect already set the token for the initial style, so
+    // we only need to update it here when switching to or staying on a Mapbox-hosted style.
+    if (styleNeedsMapboxToken) {
+      applyMapboxToken(mapboxgl, {accessToken, hasMapboxToken, styleNeedsMapboxToken})
+    }
 
     const desiredSignature = styleSignature(desiredStyle)
     if (appliedStyleSignatureRef.current === desiredSignature) return undefined
