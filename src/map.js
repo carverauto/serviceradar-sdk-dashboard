@@ -75,7 +75,9 @@ export function useMapboxMap(options = {}) {
     const initialStyle = pickStyle(optionsRef.current.style, mapbox, theme, {hasAccessToken: hasMapboxToken})
     const styleNeedsMapboxToken = styleRequiresMapboxToken(initialStyle)
 
-    applyMapboxToken(mapboxgl, {accessToken, hasMapboxToken, styleNeedsMapboxToken})
+    if (styleNeedsMapboxToken) {
+      applyMapboxToken(mapboxgl, {accessToken, hasMapboxToken, styleNeedsMapboxToken})
+    }
 
     appliedStyleSignatureRef.current = styleSignature(initialStyle)
 
