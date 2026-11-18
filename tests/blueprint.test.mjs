@@ -635,3 +635,83 @@ test("mountBlueprintDashboard preserves and merges blueprintProps.portalClassNam
   })
 })
 
+test("mountBlueprintDashboard cleans up overlapping waitForReady mounts resolving out-of-order without leaking React effects or theme listeners", async () => {
+  await withHappyDom(async (win) => {
+    const root = win.document.createElement("div")
+    const sibling = win.document.createElement("div")
+    sibling.id = "host-sibling"
+    root.appendChild(sibling)
+    win.document.body.appendChild(root)
+
+    const api1 = createDashboardApi({initialTheme: "light"})
+    const api2 = createDashboardApi({initialTheme: "dark"})
+    const readyTriggers = new Map()
+    let effectMounts = 0
+    let effectCleanups = 0
+
+    function DeferredDashboard({host: dashHost}) {
+      const markReady = useDashboardReady()
+      useEffect(() => {
+        effectMounts += 1
+        readyTriggers.set(dashHost.mountId, markReady)
+        return () => {
+          effectCleanups += 1
+        }
+      }, [dashHost.mountId, markReady])
+
+      return React.createElement(Card, null, `mount-${dashHost.mountId}`)
+    }
+
+    const mountFn = mountBlueprintDashboard(DeferredDashboard, {waitForReady: true})
+
+    const p1 = mountFn(root, {mountId: "1"}, api1.api)
+    await flushReact()
+    assert.equal(effectMounts, 1)
+    assert.equal(api1.listenerCount(), 1)
+    assert.ok(readyTriggers.has("1"))
+
+    // Start p2 on the same root before p1 becomes ready
+    const p2 = mountFn(root, {mountId: "2"}, api2.api)
+    await flushReact()
+    assert.equal(effectMounts, 2)
+    assert.equal(effectCleanups, 1)
+    assert.equal(api1.listenerCount(), 0)
+    assert.equal(api2.listenerCount(), 1)
+    assert.ok(readyTriggers.has("2"))
+
+    // Resolve p2 before p1 (out-of-order)
+    readyTriggers.get("2")()
+    const h2 = await p2
+    await flushReact()
+
+    readyTriggers.get("1")()
+    const h1 = await p1
+    await flushReact()
+
+    assert.equal(root.querySelectorAll(`style[${BLUEPRINT_STYLE_ATTRIBUTE}]`).length, 1)
+    assert.equal(root.querySelectorAll("[data-sr-blueprint-mount]").length, 1)
+    assert.ok(root.textContent.includes("mount-2"))
+    assert.equal(root.textContent.includes("mount-1"), false)
+    assert.equal(api1.listenerCount(), 0)
+    assert.equal(api2.listenerCount(), 1)
+
+    // Stale handle destroy must be a no-op and leave h2 intact
+    h1.destroy()
+    await flushReact()
+    assert.equal(api2.listenerCount(), 1)
+    assert.equal(effectCleanups, 1)
+    assert.ok(root.textContent.includes("mount-2"))
+
+    h2.destroy()
+    await flushReact()
+    assert.equal(effectMounts, 2)
+    assert.equal(effectCleanups, 2)
+    assert.equal(api1.listenerCount(), 0)
+    assert.equal(api2.listenerCount(), 0)
+    assert.equal(root.querySelectorAll(`style[${BLUEPRINT_STYLE_ATTRIBUTE}]`).length, 0)
+    assert.equal(root.querySelectorAll("[data-sr-blueprint-mount]").length, 0)
+    assert.equal(root.children.length, 1)
+    assert.equal(root.children[0], sibling)
+  })
+})
+

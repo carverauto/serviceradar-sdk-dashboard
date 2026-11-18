@@ -40,6 +40,8 @@ export {
 const BlueprintPortalContext = createContext(null)
 const BlueprintStyleManagedContext = createContext(false)
 const activeMountsByRoot = new WeakMap()
+const pendingMountsByRoot = new WeakMap()
+const latestTokenByRoot = new WeakMap()
 const useIsomorphicLayoutEffect = typeof document !== "undefined" ? useLayoutEffect : useEffect
 
 export function useBlueprintPortalContainer() {
@@ -155,6 +157,15 @@ export function mountBlueprintDashboard(Component, options = {}) {
       throw new TypeError("mountBlueprintDashboard requires a valid DOM root element")
     }
 
+    const token = (latestTokenByRoot.get(root) ?? 0) + 1
+    latestTokenByRoot.set(root, token)
+
+    const pendingCleanup = pendingMountsByRoot.get(root)
+    if (pendingCleanup) {
+      pendingMountsByRoot.delete(root)
+      pendingCleanup()
+    }
+
     const previousHandle = activeMountsByRoot.get(root)
     if (previousHandle) {
       previousHandle.destroy()
@@ -176,6 +187,20 @@ export function mountBlueprintDashboard(Component, options = {}) {
     const mountNode = doc.createElement("div")
     mountNode.setAttribute(BLUEPRINT_MOUNT_ATTRIBUTE, "true")
     root.appendChild(mountNode)
+
+    const abortController = typeof AbortController === "function" ? new AbortController() : null
+    let superseded = false
+    const cancelPending = () => {
+      if (superseded) return
+      superseded = true
+      try {
+        abortController?.abort()
+      } finally {
+        mountNode.remove()
+        styleEl?.remove()
+      }
+    }
+    pendingMountsByRoot.set(root, cancelPending)
 
     function BlueprintWrappedDashboard(props) {
       return React.createElement(
@@ -199,11 +224,29 @@ export function mountBlueprintDashboard(Component, options = {}) {
     try {
       mounted = await mountReactDashboard(BlueprintWrappedDashboard, {
         waitForReady: options.waitForReady,
+        signal: abortController?.signal,
       })(mountNode, host, api)
     } catch (error) {
+      if (pendingMountsByRoot.get(root) === cancelPending) {
+        pendingMountsByRoot.delete(root)
+      }
       mountNode.remove()
       styleEl?.remove()
       throw error
+    }
+
+    if (pendingMountsByRoot.get(root) === cancelPending) {
+      pendingMountsByRoot.delete(root)
+    }
+
+    if (superseded || latestTokenByRoot.get(root) !== token) {
+      try {
+        mounted?.destroy?.()
+      } finally {
+        mountNode.remove()
+        styleEl?.remove()
+      }
+      return {destroy() {}}
     }
 
     let destroyed = false

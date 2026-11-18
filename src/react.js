@@ -466,6 +466,11 @@ export function useDashboardController(createController, options = {}) {
 export function mountReactDashboard(Component, options = {}) {
   return async function mountDashboard(root, host, api) {
     const waitForReady = Boolean(options.waitForReady)
+    const signal = options.signal
+    if (signal?.aborted) {
+      return {destroy() {}}
+    }
+
     let mountedDashboard = null
     let readySettled = false
     let resolveReady = null
@@ -489,6 +494,15 @@ export function mountReactDashboard(Component, options = {}) {
         reactRoot?.unmount?.()
       }
     }
+
+    const onAbort = () => {
+      if (!readySettled) {
+        readySettled = true
+        resolveReady?.()
+      }
+      cleanupMount()
+    }
+    signal?.addEventListener?.("abort", onAbort, {once: true})
 
     const rootOptions = waitForReady
       ? {
@@ -536,7 +550,13 @@ export function mountReactDashboard(Component, options = {}) {
       } catch (error) {
         cleanupMount()
         throw error
+      } finally {
+        signal?.removeEventListener?.("abort", onAbort)
       }
+    } else if (signal?.aborted) {
+      cleanupMount()
+    } else {
+      signal?.removeEventListener?.("abort", onAbort)
     }
 
     return {
