@@ -159,6 +159,12 @@ export interface DashboardApi<Row = Record<string, unknown>> {
   [key: string]: unknown
 }
 
+export interface DashboardContextValue {
+  host: DashboardHost
+  api: DashboardApi
+  lifecycle?: DashboardLifecycle
+}
+
 export interface DashboardProviderProps {
   host: DashboardHost
   api: DashboardApi
@@ -203,6 +209,7 @@ export type DashboardMountFunction = (
 ) => Promise<MountedDashboard>
 
 export function DashboardProvider(props: DashboardProviderProps): ReactElement
+export function useOptionalDashboardContext(): DashboardContextValue | null
 export function useDashboardHost(): DashboardHost
 export function useDashboardApi<Row = Record<string, unknown>>(): DashboardApi<Row>
 export function useDashboardReady(): (mounted?: MountedDashboard | (() => void) | void) => void

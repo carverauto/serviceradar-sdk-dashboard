@@ -256,7 +256,7 @@ function NetworkPerfDashboard() {
         popoverProps={{portalContainer: portalContainer ?? undefined}}
         onItemSelect={setSelectedHub}
         itemRenderer={(item, {handleClick}) => (
-          <Button key={item} minimal onClick={handleClick}>{item}</Button>
+          <Button key={item} variant="minimal" onClick={handleClick}>{item}</Button>
         )}
       >
         <Button text={selectedHub} />

@@ -52,6 +52,7 @@ function createDashboardApi({initialTheme = "light"} = {}) {
         return () => themeListeners.delete(listener)
       },
     },
+    listenerCount: () => themeListeners.size,
     setTheme(nextTheme) {
       theme = nextTheme
       for (const listener of [...themeListeners]) {
@@ -505,6 +506,132 @@ test("standalone BlueprintDashboardProvider injects/cleans scoped styles and sup
     mountedNoStyles.destroy()
     await flushReact()
     assert.equal(rootNoStyles.children.length, 0)
+  })
+})
+
+test("mountBlueprintDashboard remount without prior destroy unmounts previous React root and disconnects listeners", async () => {
+  await withHappyDom(async (win) => {
+    const root = win.document.createElement("div")
+    const sibling = win.document.createElement("div")
+    sibling.id = "host-sibling"
+    root.appendChild(sibling)
+    win.document.body.appendChild(root)
+
+    const {api, listenerCount} = createDashboardApi({initialTheme: "light"})
+    let unmountCount = 0
+
+    function Dashboard() {
+      useEffect(() => () => {
+        unmountCount += 1
+      }, [])
+      return React.createElement(Card, null, "remount-probe")
+    }
+
+    const mount = mountBlueprintDashboard(Dashboard)
+    const handle1 = await mount(root, {}, api)
+    await flushReact()
+
+    assert.equal(unmountCount, 0)
+    assert.equal(listenerCount(), 1)
+    assert.equal(root.querySelector("#host-sibling"), sibling)
+
+    // Remount onto the same root without calling handle1.destroy()
+    const handle2 = await mount(root, {}, api)
+    await flushReact()
+
+    assert.equal(unmountCount, 1)
+    assert.equal(listenerCount(), 1)
+    assert.equal(root.querySelectorAll(`style[${BLUEPRINT_STYLE_ATTRIBUTE}]`).length, 1)
+    assert.equal(root.querySelector("#host-sibling"), sibling)
+
+    // Calling stale handle1.destroy() must remain an idempotent no-op and leave handle2 intact
+    handle1.destroy()
+    await flushReact()
+    assert.equal(unmountCount, 1)
+    assert.equal(listenerCount(), 1)
+    assert.equal(root.querySelectorAll(`style[${BLUEPRINT_STYLE_ATTRIBUTE}]`).length, 1)
+
+    handle2.destroy()
+    await flushReact()
+
+    assert.equal(unmountCount, 2)
+    assert.equal(listenerCount(), 0)
+    assert.equal(root.children.length, 1)
+    assert.equal(root.children[0], sibling)
+  })
+})
+
+test("mountBlueprintDashboard with waitForReady rejects on render error and removes injected nodes without hanging", async () => {
+  await withHappyDom(async (win) => {
+    const root = win.document.createElement("div")
+    const sibling = win.document.createElement("div")
+    sibling.id = "host-sibling"
+    root.appendChild(sibling)
+    win.document.body.appendChild(root)
+
+    const {api, listenerCount} = createDashboardApi({initialTheme: "light"})
+
+    function ThrowingDashboard() {
+      throw new Error("boom-render")
+    }
+
+    const mountPromise = mountBlueprintDashboard(ThrowingDashboard, {waitForReady: true})(root, {}, api)
+    await assert.rejects(
+      Promise.race([
+        mountPromise,
+        new Promise((_, reject) => nativeSetTimeout(() => reject(new Error("TIMEOUT_HUNG")), 1500)),
+      ]),
+      /boom-render/,
+    )
+    await flushReact()
+
+    assert.equal(root.querySelectorAll(`style[${BLUEPRINT_STYLE_ATTRIBUTE}]`).length, 0)
+    assert.equal(root.querySelectorAll("[data-sr-blueprint-mount]").length, 0)
+    assert.equal(root.children.length, 1)
+    assert.equal(root.children[0], sibling)
+    assert.equal(listenerCount(), 0)
+  })
+})
+
+test("mountBlueprintDashboard preserves and merges blueprintProps.portalClassName", async () => {
+  await withHappyDom(async (win) => {
+    const rootA = win.document.createElement("div")
+    const rootB = win.document.createElement("div")
+    win.document.body.append(rootA, rootB)
+
+    const {api} = createDashboardApi({initialTheme: "light"})
+
+    function DrawerDashboard() {
+      return React.createElement(
+        Drawer,
+        {isOpen: true, title: "Portal Class Probe", hasBackdrop: false},
+        React.createElement("span", null, "portal-body"),
+      )
+    }
+
+    const handleA = await mountBlueprintDashboard(DrawerDashboard, {
+      blueprintProps: {portalClassName: "custom-bp-portal"},
+    })(rootA, {}, api)
+    const handleB = await mountBlueprintDashboard(DrawerDashboard, {
+      portalClassName: "option-bp-portal",
+      blueprintProps: {portalClassName: "custom-bp-portal"},
+    })(rootB, {}, api)
+    await flushReact()
+
+    const portalA = rootA.querySelector(".bp6-portal")
+    assert.ok(portalA)
+    assert.equal(portalA.classList.contains("custom-bp-portal"), true)
+
+    const portalB = rootB.querySelector(".bp6-portal")
+    assert.ok(portalB)
+    assert.equal(portalB.classList.contains("custom-bp-portal"), true)
+    assert.equal(portalB.classList.contains("option-bp-portal"), true)
+
+    handleA.destroy()
+    handleB.destroy()
+    await flushReact()
+    assert.equal(rootA.children.length, 0)
+    assert.equal(rootB.children.length, 0)
   })
 })
 

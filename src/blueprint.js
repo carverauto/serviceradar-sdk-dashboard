@@ -39,6 +39,7 @@ export {
 
 const BlueprintPortalContext = createContext(null)
 const BlueprintStyleManagedContext = createContext(false)
+const activeMountsByRoot = new WeakMap()
 const useIsomorphicLayoutEffect = typeof document !== "undefined" ? useLayoutEffect : useEffect
 
 export function useBlueprintPortalContainer() {
@@ -126,7 +127,7 @@ export function BlueprintDashboardProvider({
         BlueprintProvider,
         {
           ...blueprintProps,
-          portalClassName: joinClassNames(portalClassName),
+          portalClassName: joinClassNames(blueprintProps?.portalClassName, portalClassName),
           portalContainer: activePortalContainer ?? undefined,
         },
         content,
@@ -152,6 +153,11 @@ export function mountBlueprintDashboard(Component, options = {}) {
   return async function mountDashboard(root, host, api) {
     if (!root || typeof root.ownerDocument?.createElement !== "function") {
       throw new TypeError("mountBlueprintDashboard requires a valid DOM root element")
+    }
+
+    const previousHandle = activeMountsByRoot.get(root)
+    if (previousHandle) {
+      previousHandle.destroy()
     }
 
     clearBlueprintNodes(root)
@@ -201,10 +207,13 @@ export function mountBlueprintDashboard(Component, options = {}) {
     }
 
     let destroyed = false
-    return {
+    const handle = {
       destroy() {
         if (destroyed) return
         destroyed = true
+        if (activeMountsByRoot.get(root) === handle) {
+          activeMountsByRoot.delete(root)
+        }
         try {
           mounted?.destroy?.()
         } finally {
@@ -213,6 +222,8 @@ export function mountBlueprintDashboard(Component, options = {}) {
         }
       },
     }
+    activeMountsByRoot.set(root, handle)
+    return handle
   }
 }
 

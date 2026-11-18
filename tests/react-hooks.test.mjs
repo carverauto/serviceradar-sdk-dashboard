@@ -2,9 +2,11 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import React from "react"
 import {renderToStaticMarkup} from "react-dom/server"
+import {Window} from "happy-dom"
 
 import {
   DashboardProvider,
+  mountReactDashboard,
   useDashboardController,
   useDashboardDetails,
   useDashboardFrame,
@@ -16,6 +18,7 @@ import {
   useDashboardReady,
   useDashboardSavedQueries,
   useFrameRows,
+  useOptionalDashboardContext,
 } from "../src/react.js"
 
 test("React hooks expose preferences, saved queries, popup, and details host APIs", () => {
@@ -306,4 +309,67 @@ test("React controller hook exposes an imperative mount ref", () => {
   )
 
   assert.equal(html, '<span data-has-ref="true">ready</span>')
+})
+
+test("useOptionalDashboardContext returns null outside DashboardProvider and context inside", () => {
+  function Probe() {
+    const context = useOptionalDashboardContext()
+    return React.createElement("span", null, context ? "inside" : "outside")
+  }
+
+  assert.equal(renderToStaticMarkup(React.createElement(Probe)), "<span>outside</span>")
+  assert.equal(
+    renderToStaticMarkup(
+      React.createElement(DashboardProvider, {host: {}, api: {}}, React.createElement(Probe)),
+    ),
+    "<span>inside</span>",
+  )
+})
+
+test("mountReactDashboard with waitForReady rejects and unmounts on component render error", async () => {
+  const nativeSetTimeout = globalThis.setTimeout
+  const win = new Window({url: "https://dashboard.serviceradar.test/"})
+  const keys = ["window", "document", "HTMLElement", "HTMLDivElement", "Element", "Node", "Text", "setTimeout", "clearTimeout"]
+  const previous = new Map()
+
+  for (const key of keys) {
+    previous.set(key, Object.getOwnPropertyDescriptor(globalThis, key))
+    const value = key === "window" ? win : win[key]
+    if (value !== undefined) {
+      Object.defineProperty(globalThis, key, {
+        configurable: true,
+        writable: true,
+        value: typeof value === "function" && !/^[A-Z]/.test(key) ? value.bind(win) : value,
+      })
+    }
+  }
+
+  try {
+    const root = win.document.createElement("div")
+    win.document.body.appendChild(root)
+
+    function ThrowingDashboard() {
+      throw new Error("react-boom")
+    }
+
+    const mountPromise = mountReactDashboard(ThrowingDashboard, {waitForReady: true})(root, {}, {})
+    await assert.rejects(
+      Promise.race([
+        mountPromise,
+        new Promise((_, reject) => nativeSetTimeout(() => reject(new Error("TIMEOUT_HUNG")), 1500)),
+      ]),
+      /react-boom/,
+    )
+
+    for (let i = 0; i < 4; i += 1) {
+      await new Promise((resolve) => nativeSetTimeout(resolve, 10))
+    }
+    assert.equal(root.children.length, 0)
+  } finally {
+    await win.happyDOM.close()
+    for (const [key, desc] of previous.entries()) {
+      if (desc) Object.defineProperty(globalThis, key, desc)
+      else delete globalThis[key]
+    }
+  }
 })
