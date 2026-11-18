@@ -157,6 +157,10 @@ export function mountBlueprintDashboard(Component, options = {}) {
       throw new TypeError("mountBlueprintDashboard requires a valid DOM root element")
     }
 
+    if (api?.signal?.aborted || options.signal?.aborted) {
+      return {destroy() {}}
+    }
+
     const token = (latestTokenByRoot.get(root) ?? 0) + 1
     latestTokenByRoot.set(root, token)
 
@@ -193,6 +197,9 @@ export function mountBlueprintDashboard(Component, options = {}) {
     const cancelPending = () => {
       if (superseded) return
       superseded = true
+      if (pendingMountsByRoot.get(root) === cancelPending) {
+        pendingMountsByRoot.delete(root)
+      }
       try {
         abortController?.abort()
       } finally {
@@ -201,6 +208,18 @@ export function mountBlueprintDashboard(Component, options = {}) {
       }
     }
     pendingMountsByRoot.set(root, cancelPending)
+
+    const externalSignals = [options.signal, api?.signal].filter(
+      (sig) => sig && typeof sig.addEventListener === "function",
+    )
+    const onExternalAbort = () => cancelPending()
+    for (const sig of externalSignals) {
+      if (sig.aborted) {
+        cancelPending()
+        return {destroy() {}}
+      }
+      sig.addEventListener("abort", onExternalAbort, {once: true})
+    }
 
     function BlueprintWrappedDashboard(props) {
       return React.createElement(
@@ -233,6 +252,10 @@ export function mountBlueprintDashboard(Component, options = {}) {
       mountNode.remove()
       styleEl?.remove()
       throw error
+    } finally {
+      for (const sig of externalSignals) {
+        sig.removeEventListener("abort", onExternalAbort)
+      }
     }
 
     if (pendingMountsByRoot.get(root) === cancelPending) {

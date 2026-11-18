@@ -715,3 +715,65 @@ test("mountBlueprintDashboard cleans up overlapping waitForReady mounts resolvin
   })
 })
 
+test("mountBlueprintDashboard aborts pending waitForReady mount when api.signal aborts without leaking listeners or DOM nodes", async () => {
+  await withHappyDom(async (win) => {
+    const root = win.document.createElement("div")
+    const sibling = win.document.createElement("div")
+    sibling.id = "host-sibling"
+    root.appendChild(sibling)
+    win.document.body.appendChild(root)
+
+    const {api, listenerCount} = createDashboardApi({initialTheme: "light"})
+    const controller = new AbortController()
+    let effectMounts = 0
+    let effectCleanups = 0
+
+    function NeverReadyDashboard() {
+      useEffect(() => {
+        effectMounts += 1
+        return () => {
+          effectCleanups += 1
+        }
+      }, [])
+      return React.createElement(Card, null, "never-ready")
+    }
+
+    const mountPromise = mountBlueprintDashboard(NeverReadyDashboard, {waitForReady: true})(
+      root,
+      {},
+      {...api, signal: controller.signal},
+    )
+    await flushReact()
+
+    assert.equal(effectMounts, 1)
+    assert.equal(listenerCount(), 1)
+
+    controller.abort()
+    const handle = await mountPromise
+    await flushReact()
+
+    assert.equal(effectCleanups, 1)
+    assert.equal(listenerCount(), 0)
+    assert.equal(root.querySelectorAll(`style[${BLUEPRINT_STYLE_ATTRIBUTE}]`).length, 0)
+    assert.equal(root.querySelectorAll("[data-sr-blueprint-mount]").length, 0)
+    assert.equal(root.children.length, 1)
+    assert.equal(root.children[0], sibling)
+    handle.destroy()
+
+    // Pre-aborted signal must return cleanly without mounting or touching root
+    const preAborted = new AbortController()
+    preAborted.abort()
+    const preHandle = await mountBlueprintDashboard(NeverReadyDashboard, {waitForReady: true})(
+      root,
+      {},
+      {...api, signal: preAborted.signal},
+    )
+    await flushReact()
+    assert.equal(effectMounts, 1)
+    assert.equal(listenerCount(), 0)
+    assert.equal(root.children.length, 1)
+    assert.equal(root.children[0], sibling)
+    preHandle.destroy()
+  })
+})
+
