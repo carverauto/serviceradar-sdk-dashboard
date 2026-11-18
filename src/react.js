@@ -511,6 +511,10 @@ function useDashboardContext() {
   return context
 }
 
+export function useOptionalDashboardContext() {
+  return useContext(DashboardContext)
+}
+
 function safeFrames(api) {
   return Array.isArray(api?.frames?.()) ? [...api.frames()] : []
 }

@@ -24,6 +24,10 @@
       "types": "./src/react.d.ts",
       "default": "./src/react.js"
     },
+    "./blueprint": {
+      "types": "./src/blueprint.d.ts",
+      "default": "./src/blueprint.js"
+    },
     "./srql": {
       "types": "./src/srql.d.ts",
       "default": "./src/srql.js"
@@ -73,12 +77,30 @@
   },
   "peerDependencies": {
     "react": ">=19.2.5",
-    "react-dom": ">=19.2.5"
+    "react-dom": ">=19.2.5",
+    "@blueprintjs/core": "^6.16.0",
+    "@blueprintjs/icons": "^6.16.0",
+    "@blueprintjs/select": "^6.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@blueprintjs/core": {
+      "optional": true
+    },
+    "@blueprintjs/icons": {
+      "optional": true
+    },
+    "@blueprintjs/select": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@carverauto/serviceradar-cli": "^0.1.4"
   },
   "devDependencies": {
+    "@blueprintjs/core": "^6.23.0",
+    "@blueprintjs/icons": "^6.16.0",
+    "@blueprintjs/select": "^6.4.2",
+    "happy-dom": "^21.0.4",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"
   }

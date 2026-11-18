@@ -213,6 +213,89 @@ destroys stale controllers on unmount, reports readiness to
 `mountReactDashboard(..., {waitForReady: true})`, and exposes async startup
 errors for the component to render.
 
+## Blueprint v6 Integration (`./blueprint`)
+
+For operational dashboards built with Palantir Blueprint v6 (`@blueprintjs/core`,
+`@blueprintjs/icons`, `@blueprintjs/select`) on React 19, install the optional
+Blueprint peer dependencies in your dashboard package:
+
+```bash
+npm install @blueprintjs/core@^6.16.0 @blueprintjs/icons@^6.16.0 @blueprintjs/select@^6.3.0
+```
+
+> `@blueprintjs/*` packages are **optional** peer dependencies. Dashboards that do
+> not import `@carverauto/serviceradar-dashboard-sdk/blueprint` do not need them
+> installed and do not pull Blueprint code or styles into `renderer.js`.
+
+Use `mountBlueprintDashboard` as your `mountDashboard` entrypoint:
+
+```jsx
+import React, {useState} from "react"
+import {Button, Callout, Card, Drawer, Tag} from "@blueprintjs/core"
+import {PulseIcon} from "@blueprintjs/icons"
+import {Select} from "@blueprintjs/select"
+import {
+  mountBlueprintDashboard,
+  useBlueprintPortalContainer,
+} from "@carverauto/serviceradar-dashboard-sdk/blueprint"
+
+function NetworkPerfDashboard() {
+  const portalContainer = useBlueprintPortalContainer()
+  const [selectedHub, setSelectedHub] = useState("hub-east")
+  const [drawerOpen, setDrawerOpen] = useState(false)
+
+  return (
+    <Card>
+      <Tag icon={<PulseIcon />} intent="primary">{selectedHub}</Tag>
+      <Callout intent="warning" title="Elevated Loss">
+        Inspect spoke-to-hub telemetry in the detail drawer.
+      </Callout>
+      <Select
+        items={["hub-east", "hub-west"]}
+        filterable={false}
+        popoverProps={{portalContainer: portalContainer ?? undefined}}
+        onItemSelect={setSelectedHub}
+        itemRenderer={(item, {handleClick}) => (
+          <Button key={item} minimal onClick={handleClick}>{item}</Button>
+        )}
+      >
+        <Button text={selectedHub} />
+      </Select>
+      <Button onClick={() => setDrawerOpen(true)}>Inspect</Button>
+      <Drawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} title={selectedHub}>
+        <div>Spoke history</div>
+      </Drawer>
+    </Card>
+  )
+}
+
+export const mountDashboard = mountBlueprintDashboard(NetworkPerfDashboard)
+```
+
+What `./blueprint` handles automatically:
+
+- **Theme sync**: `BlueprintDashboardProvider` reads `useDashboardTheme()` and
+  toggles `.bp6-dark` and `data-bp-color-scheme="dark" | "light"` on the
+  `.sr-dashboard-blueprint` root wrapper whenever ServiceRadar switches themes.
+- **Scoped styles & `--sr-*` token bridge**: `mountBlueprintDashboard` injects
+  `<style data-sr-blueprint-sdk="true">` directly inside the host `root` element
+  (never `document.head`), excluding global `normalize.css` resets and icon
+  webfont `@font-face` rules, scoping all Blueprint rules under
+  `.sr-dashboard-blueprint`, and bridging ServiceRadar `--sr-color-*` /
+  `--sr-font-*` tokens onto Blueprint `--bp-*` variables.
+- **Portal containment**: `BlueprintDashboardProvider` configures Blueprint's
+  `BlueprintProvider` (`PortalProvider` + `OverlaysProvider` + `HotkeysProvider`)
+  to target `.sr-dashboard-blueprint-portals` inside `.sr-dashboard-blueprint`,
+  and exposes that node via `useBlueprintPortalContainer()`. `Drawer`, `Dialog`,
+  `PopoverNext`, `Tooltip`, and `Select` portals stay inside your dashboard root
+  (inheriting `.bp6-dark` and scoped CSS) instead of leaking onto `document.body`.
+- **Modular SVG icons**: Import tree-shakeable SVG icon components directly from
+  `@blueprintjs/icons` (e.g. `PulseIcon`) or `@blueprintjs/icons/next` rather
+  than importing `blueprint-icons.css`, keeping `renderer.js` self-contained and
+  CSP `font-src` safe.
+- **Deterministic cleanup**: `destroy()` unmounts the React root, tears down all
+  portals, and removes `<style data-sr-blueprint-sdk>` from `root`.
+
 ## Production-Grade React Hooks
 
 The SDK ships a layered set of hooks designed for dashboards that need to scale
