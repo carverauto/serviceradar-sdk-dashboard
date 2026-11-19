@@ -274,7 +274,8 @@ export const mountDashboard = mountBlueprintDashboard(NetworkPerfDashboard)
 
 What `./blueprint` handles automatically:
 
-- **Theme sync**: `BlueprintDashboardProvider` reads `useDashboardTheme()` and
+- **Theme sync**: `BlueprintDashboardProvider` follows the dashboard API theme
+  (`api.theme()` / `api.onThemeChange`, or an explicit `theme` prop) and
   toggles `.bp6-dark` and `data-bp-color-scheme="dark" | "light"` on the
   `.sr-dashboard-blueprint` root wrapper whenever ServiceRadar switches themes.
 - **Scoped styles & `--sr-*` token bridge**: `mountBlueprintDashboard` injects
