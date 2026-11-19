@@ -284,11 +284,13 @@ What `./blueprint` handles automatically:
   `.sr-dashboard-blueprint`, and bridging ServiceRadar `--sr-color-*` /
   `--sr-font-*` tokens onto Blueprint `--bp-*` variables.
 - **Portal containment**: `BlueprintDashboardProvider` configures Blueprint's
-  `BlueprintProvider` (`PortalProvider` + `OverlaysProvider` + `HotkeysProvider`)
-  to target `.sr-dashboard-blueprint-portals` inside `.sr-dashboard-blueprint`,
+  `PortalProvider` and `HotkeysProvider` to target `.sr-dashboard-blueprint-portals` inside `.sr-dashboard-blueprint`,
   and exposes that node via `useBlueprintPortalContainer()`. `Drawer`, `Dialog`,
   `PopoverNext`, `Tooltip`, and `Select` portals stay inside your dashboard root
   (inheriting `.bp6-dark` and scoped CSS) instead of leaking onto `document.body`.
+- **Scroll lock**: every Blueprint dashboard shares one overlay stack, so
+  Blueprint's `body.bp6-overlay-open` scroll lock stays on until the last
+  backdrop `Drawer` or `Dialog` across all mounted dashboards closes.
 - **Modular SVG icons**: Import tree-shakeable SVG icon components directly from
   `@blueprintjs/icons` (e.g. `PulseIcon`) or `@blueprintjs/icons/next` rather
   than importing `blueprint-icons.css`, keeping `renderer.js` self-contained and

@@ -22,37 +22,20 @@ export const BLUEPRINT_THEME_BRIDGE_CSS: string
 export function scopeBlueprintCss(rawCss: string, scopeSelector?: string): string
 export function buildBlueprintThemeBridgeCss(scopeSelector?: string): string
 
-export interface BlueprintProviderPassThroughProps {
-  hotkeysProviderValue?: unknown
-  hotkeysProviderDialogProps?: Record<string, unknown>
-  hotkeysProviderRenderDialog?: (...args: unknown[]) => ReactNode
-  theme?: unknown
-  themesByVersion?: Readonly<Record<string, unknown>>
-  isDarkMode?: boolean
-  [key: string]: unknown
-}
-
 export interface BlueprintDashboardProviderProps {
   children?: ReactNode
   className?: string
   style?: CSSProperties
   portalClassName?: string
-  portalContainer?: HTMLElement | null
   theme?: DashboardTheme
   host?: DashboardHost
   api?: DashboardApi
-  injectStyles?: boolean
-  styles?: string | string[]
-  blueprintProps?: BlueprintProviderPassThroughProps
 }
 
 export interface MountBlueprintDashboardOptions extends MountReactDashboardOptions {
   className?: string
   style?: CSSProperties
   portalClassName?: string
-  injectStyles?: boolean
-  styles?: string | string[]
-  blueprintProps?: BlueprintProviderPassThroughProps
 }
 
 export function BlueprintDashboardProvider(props: BlueprintDashboardProviderProps): ReactElement

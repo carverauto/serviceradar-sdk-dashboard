@@ -12,6 +12,8 @@ const EXTERNAL_IMPORT_RE = /(?:normalize\.css|blueprint-icons(?:\.css)?)/i
 const DARK_CLASS_PREFIX_RE = /^\.bp6-dark(?=$|[ >+~.:[])/
 const DARK_SCHEME_PREFIX_RE = /^\[data-bp-color-scheme=["']?dark["']?\](?=$|[ >+~.:[])/i
 const BODY_PREFIX_RE = /^body(?=$|[ >+~.:[])/i
+const BODY_STATE_CLASS_RE = /^body\.[\w-]+$/i
+const FOCUS_DISABLED_PREFIX_RE = /^\.bp6-focus-disabled(?=\s)/
 const DIR_PREFIX_RE = /^(\[dir=(?:["']?(?:rtl|ltr)["']?)\])\s+([\s\S]+)$/i
 
 export function scopeBlueprintCss(rawCss, scopeSelector = `.${BLUEPRINT_ROOT_CLASS}`) {
@@ -176,6 +178,14 @@ function rewriteSelector(selector, scope) {
 
   if (s === ":root" || s === "html" || s === "body") {
     return [scope]
+  }
+
+  if (BODY_STATE_CLASS_RE.test(s)) {
+    return [s]
+  }
+
+  if (FOCUS_DISABLED_PREFIX_RE.test(s)) {
+    return [`.bp6-focus-disabled ${scope}${s.slice(".bp6-focus-disabled".length)}`]
   }
 
   if (BODY_PREFIX_RE.test(s)) {

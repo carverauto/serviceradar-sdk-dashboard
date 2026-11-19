@@ -1,5 +1,5 @@
-import React, {createContext, useContext, useEffect, useLayoutEffect, useMemo, useState} from "react"
-import {BlueprintProvider} from "@blueprintjs/core"
+import React, {createContext, useContext, useEffect, useLayoutEffect, useState} from "react"
+import {HotkeysProvider, OverlaysContext, PortalProvider} from "@blueprintjs/core"
 import {
   DashboardProvider,
   mountReactDashboard,
@@ -42,6 +42,8 @@ const BlueprintStyleManagedContext = createContext(false)
 const activeMountsByRoot = new WeakMap()
 const pendingMountsByRoot = new WeakMap()
 const latestTokenByRoot = new WeakMap()
+const sharedOverlaysContextValue = {hasProvider: true, stack: {current: []}}
+const BLUEPRINT_STYLESHEET = `${BLUEPRINT_SCOPED_CSS}\n${BLUEPRINT_THEME_BRIDGE_CSS}`
 const useIsomorphicLayoutEffect = typeof document !== "undefined" ? useLayoutEffect : useEffect
 
 export function useBlueprintPortalContainer() {
@@ -53,13 +55,9 @@ export function BlueprintDashboardProvider({
   className,
   style,
   portalClassName,
-  portalContainer: portalContainerProp,
   theme: themeProp,
   host: hostProp,
   api: apiProp,
-  injectStyles,
-  styles,
-  blueprintProps,
 }) {
   const dashboardContext = useOptionalDashboardContext()
   const stylesManagedByMount = useContext(BlueprintStyleManagedContext)
@@ -68,31 +66,24 @@ export function BlueprintDashboardProvider({
   const isDark = resolvedTheme === "dark"
 
   const [wrapperEl, setWrapperEl] = useState(null)
-  const [internalPortalContainer, setInternalPortalContainer] = useState(null)
-  const activePortalContainer = portalContainerProp ?? internalPortalContainer
+  const [portalContainer, setPortalContainer] = useState(null)
   const isClient = typeof document !== "undefined"
 
-  const shouldInjectStyles = injectStyles !== undefined
-    ? Boolean(injectStyles)
-    : !stylesManagedByMount
-
-  const stylesheetText = useMemo(() => buildBlueprintStylesheet(styles), [styles])
-
   useIsomorphicLayoutEffect(() => {
-    if (!shouldInjectStyles || !wrapperEl?.ownerDocument) return undefined
+    if (stylesManagedByMount || !wrapperEl?.ownerDocument) return undefined
 
     const existing = findDirectChildByAttr(wrapperEl, BLUEPRINT_STYLE_ATTRIBUTE)
     if (existing) return undefined
 
     const styleEl = wrapperEl.ownerDocument.createElement("style")
     styleEl.setAttribute(BLUEPRINT_STYLE_ATTRIBUTE, "true")
-    styleEl.textContent = stylesheetText
+    styleEl.textContent = BLUEPRINT_STYLESHEET
     wrapperEl.prepend(styleEl)
 
     return () => {
       styleEl.remove()
     }
-  }, [shouldInjectStyles, stylesheetText, wrapperEl])
+  }, [stylesManagedByMount, wrapperEl])
 
   const rootClasses = joinClassNames(
     BLUEPRINT_ROOT_CLASS,
@@ -100,17 +91,15 @@ export function BlueprintDashboardProvider({
     className,
   )
 
-  const portalHostNode = portalContainerProp
-    ? null
-    : React.createElement("div", {
-      className: BLUEPRINT_PORTAL_CLASS,
-      [BLUEPRINT_PORTAL_ATTRIBUTE]: "true",
-      ref: setInternalPortalContainer,
-    })
+  const portalHostNode = React.createElement("div", {
+    className: BLUEPRINT_PORTAL_CLASS,
+    [BLUEPRINT_PORTAL_ATTRIBUTE]: "true",
+    ref: setPortalContainer,
+  })
 
   // Hold children/overlays on the client until portalContainer is committed in the DOM,
   // so Blueprint Portal never transiently falls back to document.body on initial render.
-  const canRenderChildren = !isClient || activePortalContainer != null
+  const canRenderChildren = !isClient || portalContainer != null
 
   let content = children
   if (!dashboardContext && (hostProp !== undefined || apiProp !== undefined)) {
@@ -124,15 +113,15 @@ export function BlueprintDashboardProvider({
   const blueprintTree = canRenderChildren
     ? React.createElement(
       BlueprintPortalContext.Provider,
-      {value: activePortalContainer ?? null},
+      {value: portalContainer},
       React.createElement(
-        BlueprintProvider,
-        {
-          ...blueprintProps,
-          portalClassName: joinClassNames(blueprintProps?.portalClassName, portalClassName),
-          portalContainer: activePortalContainer ?? undefined,
-        },
-        content,
+        PortalProvider,
+        {portalClassName, portalContainer: portalContainer ?? undefined},
+        React.createElement(
+          OverlaysContext.Provider,
+          {value: sharedOverlaysContextValue},
+          React.createElement(HotkeysProvider, null, content),
+        ),
       ),
     )
     : null
@@ -178,15 +167,10 @@ export function mountBlueprintDashboard(Component, options = {}) {
     clearBlueprintNodes(root)
 
     const doc = root.ownerDocument
-    const shouldInjectStyles = options.injectStyles !== false
-    let styleEl = null
-
-    if (shouldInjectStyles) {
-      styleEl = doc.createElement("style")
-      styleEl.setAttribute(BLUEPRINT_STYLE_ATTRIBUTE, "true")
-      styleEl.textContent = buildBlueprintStylesheet(options.styles)
-      root.appendChild(styleEl)
-    }
+    const styleEl = doc.createElement("style")
+    styleEl.setAttribute(BLUEPRINT_STYLE_ATTRIBUTE, "true")
+    styleEl.textContent = BLUEPRINT_STYLESHEET
+    root.appendChild(styleEl)
 
     const mountNode = doc.createElement("div")
     mountNode.setAttribute(BLUEPRINT_MOUNT_ATTRIBUTE, "true")
@@ -204,7 +188,7 @@ export function mountBlueprintDashboard(Component, options = {}) {
         abortController?.abort()
       } finally {
         mountNode.remove()
-        styleEl?.remove()
+        styleEl.remove()
       }
     }
     pendingMountsByRoot.set(root, cancelPending)
@@ -224,15 +208,13 @@ export function mountBlueprintDashboard(Component, options = {}) {
     function BlueprintWrappedDashboard(props) {
       return React.createElement(
         BlueprintStyleManagedContext.Provider,
-        {value: shouldInjectStyles},
+        {value: true},
         React.createElement(
           BlueprintDashboardProvider,
           {
             className: options.className,
             style: options.style,
             portalClassName: options.portalClassName,
-            injectStyles: false,
-            blueprintProps: options.blueprintProps,
           },
           React.createElement(Component, props),
         ),
@@ -250,7 +232,7 @@ export function mountBlueprintDashboard(Component, options = {}) {
         pendingMountsByRoot.delete(root)
       }
       mountNode.remove()
-      styleEl?.remove()
+      styleEl.remove()
       throw error
     } finally {
       for (const sig of externalSignals) {
@@ -267,7 +249,7 @@ export function mountBlueprintDashboard(Component, options = {}) {
         mounted?.destroy?.()
       } finally {
         mountNode.remove()
-        styleEl?.remove()
+        styleEl.remove()
       }
       return {destroy() {}}
     }
@@ -284,7 +266,7 @@ export function mountBlueprintDashboard(Component, options = {}) {
           mounted?.destroy?.()
         } finally {
           mountNode.remove()
-          styleEl?.remove()
+          styleEl.remove()
         }
       },
     }
@@ -310,17 +292,6 @@ function readTheme(api) {
   return api?.theme?.() || (api?.isDarkMode?.() ? "dark" : "light")
 }
 
-function buildBlueprintStylesheet(extraStyles) {
-  const parts = [BLUEPRINT_SCOPED_CSS, BLUEPRINT_THEME_BRIDGE_CSS]
-  if (typeof extraStyles === "string" && extraStyles.trim()) {
-    parts.push(extraStyles)
-  } else if (Array.isArray(extraStyles)) {
-    for (const chunk of extraStyles) {
-      if (typeof chunk === "string" && chunk.trim()) parts.push(chunk)
-    }
-  }
-  return parts.join("\n")
-}
 
 function clearBlueprintNodes(root) {
   if (!root?.children) return

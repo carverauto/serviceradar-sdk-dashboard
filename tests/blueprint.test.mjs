@@ -178,7 +178,7 @@ function collectNonKeyframeSelectors(css) {
   return selectors
 }
 
-test("BLUEPRINT_SCOPED_CSS excludes normalize, icon fonts, and bare globals while scoping selectors", () => {
+test("BLUEPRINT_SCOPED_CSS excludes normalize, icon fonts, and bare globals except the overlay scroll lock", () => {
   assert.ok(BLUEPRINT_SCOPED_CSS.includes(`.${BLUEPRINT_ROOT_CLASS} .bp6-card`))
   assert.ok(BLUEPRINT_SCOPED_CSS.includes(`.${BLUEPRINT_ROOT_CLASS} .bp6-drawer`))
   assert.ok(BLUEPRINT_SCOPED_CSS.includes(`.${BLUEPRINT_ROOT_CLASS} .bp6-popover`))
@@ -196,7 +196,7 @@ test("BLUEPRINT_SCOPED_CSS excludes normalize, icon fonts, and bare globals whil
   const selectors = collectNonKeyframeSelectors(BLUEPRINT_SCOPED_CSS)
   assert.ok(selectors.length > 500)
   const unscoped = selectors.filter((selector) => !selector.includes(`.${BLUEPRINT_ROOT_CLASS}`))
-  assert.deepEqual(unscoped, [])
+  assert.deepEqual(unscoped, ["body.bp6-overlay-open"])
 })
 
 test("BLUEPRINT_THEME_BRIDGE_CSS maps ServiceRadar --sr-color-* tokens and overlay z-index", () => {
@@ -220,6 +220,7 @@ test("scopeBlueprintCss preserves @keyframes and recursively scopes @media/@supp
     :root { --bp-typography-family-default: "Inter", blueprint-icons-16, sans-serif; }
     html, body { margin: 0; }
     body.bp6-overlay-open { overflow: hidden; }
+    .bp6-focus-disabled :focus { outline: none !important; }
     .bp6-icon-add::before { content: "\\f109"; }
     @keyframes bp6-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     @media (min-width: 600px) {
@@ -235,7 +236,10 @@ test("scopeBlueprintCss preserves @keyframes and recursively scopes @media/@supp
   assert.ok(scoped.includes(".sr-dashboard-blueprint.bp6-dark .bp6-card"))
   assert.ok(scoped.includes(".sr-dashboard-blueprint .bp6-dark .bp6-card"))
   assert.ok(scoped.includes(".sr-dashboard-blueprint a:hover"))
-  assert.ok(scoped.includes(".sr-dashboard-blueprint.bp6-overlay-open"))
+  assert.ok(scoped.includes("body.bp6-overlay-open{"))
+  assert.equal(scoped.includes(".sr-dashboard-blueprint.bp6-overlay-open"), false)
+  assert.ok(scoped.includes(".bp6-focus-disabled .sr-dashboard-blueprint :focus{"))
+  assert.equal(scoped.includes(".sr-dashboard-blueprint .bp6-focus-disabled"), false)
 })
 
 test("scripts/generate-blueprint-css.mjs --check matches installed Blueprint CSS", () => {
@@ -458,7 +462,7 @@ test("mountBlueprintDashboard honors waitForReady option", async () => {
   })
 })
 
-test("standalone BlueprintDashboardProvider injects/cleans scoped styles and supports injectStyles: false", async () => {
+test("standalone BlueprintDashboardProvider injects and cleans scoped styles", async () => {
   await withHappyDom(async (win) => {
     const root = win.document.createElement("div")
     win.document.body.appendChild(root)
@@ -492,20 +496,6 @@ test("standalone BlueprintDashboardProvider injects/cleans scoped styles and sup
     reactRoot.unmount()
     await flushReact()
     assert.equal(root.children.length, 0)
-
-    const rootNoStyles = win.document.createElement("div")
-    win.document.body.appendChild(rootNoStyles)
-    const mountedNoStyles = await mountBlueprintDashboard(
-      () => React.createElement(Card, null, "no-styles"),
-      {injectStyles: false},
-    )(rootNoStyles, {}, api)
-    await flushReact()
-
-    assert.equal(rootNoStyles.querySelectorAll(`style[${BLUEPRINT_STYLE_ATTRIBUTE}]`).length, 0)
-    assert.ok(rootNoStyles.textContent.includes("no-styles"))
-    mountedNoStyles.destroy()
-    await flushReact()
-    assert.equal(rootNoStyles.children.length, 0)
   })
 })
 
@@ -593,7 +583,7 @@ test("mountBlueprintDashboard with waitForReady rejects on render error and remo
   })
 })
 
-test("mountBlueprintDashboard preserves and merges blueprintProps.portalClassName", async () => {
+test("mountBlueprintDashboard applies portalClassName to contained portals", async () => {
   await withHappyDom(async (win) => {
     const rootA = win.document.createElement("div")
     const rootB = win.document.createElement("div")
@@ -609,22 +599,18 @@ test("mountBlueprintDashboard preserves and merges blueprintProps.portalClassNam
       )
     }
 
-    const handleA = await mountBlueprintDashboard(DrawerDashboard, {
-      blueprintProps: {portalClassName: "custom-bp-portal"},
-    })(rootA, {}, api)
+    const handleA = await mountBlueprintDashboard(DrawerDashboard)(rootA, {}, api)
     const handleB = await mountBlueprintDashboard(DrawerDashboard, {
       portalClassName: "option-bp-portal",
-      blueprintProps: {portalClassName: "custom-bp-portal"},
     })(rootB, {}, api)
     await flushReact()
 
     const portalA = rootA.querySelector(".bp6-portal")
     assert.ok(portalA)
-    assert.equal(portalA.classList.contains("custom-bp-portal"), true)
+    assert.equal(portalA.classList.contains("option-bp-portal"), false)
 
     const portalB = rootB.querySelector(".bp6-portal")
     assert.ok(portalB)
-    assert.equal(portalB.classList.contains("custom-bp-portal"), true)
     assert.equal(portalB.classList.contains("option-bp-portal"), true)
 
     handleA.destroy()
@@ -632,6 +618,47 @@ test("mountBlueprintDashboard preserves and merges blueprintProps.portalClassNam
     await flushReact()
     assert.equal(rootA.children.length, 0)
     assert.equal(rootB.children.length, 0)
+  })
+})
+
+test("backdrop drawers lock body scroll until the last open drawer across dashboards closes", async () => {
+  await withHappyDom(async (win) => {
+    const rootA = win.document.createElement("div")
+    const rootB = win.document.createElement("div")
+    win.document.body.append(rootA, rootB)
+    const {api} = createDashboardApi({initialTheme: "light"})
+    const setters = {}
+
+    function DrawerDashboard({host}) {
+      const [isOpen, setIsOpen] = useState(false)
+      setters[host.id] = setIsOpen
+      return React.createElement(Drawer, {isOpen, title: host.id}, "drawer")
+    }
+
+    const handleA = await mountBlueprintDashboard(DrawerDashboard)(rootA, {id: "a"}, api)
+    const handleB = await mountBlueprintDashboard(DrawerDashboard)(rootB, {id: "b"}, api)
+    await flushReact()
+
+    const scrollLocked = () => win.getComputedStyle(win.document.body).overflow === "hidden"
+    assert.equal(scrollLocked(), false)
+
+    setters.a(true)
+    await flushReact()
+    setters.b(true)
+    await flushReact()
+    assert.equal(scrollLocked(), true)
+
+    setters.a(false)
+    await flushReact()
+    assert.equal(scrollLocked(), true)
+
+    setters.b(false)
+    await flushReact()
+    assert.equal(scrollLocked(), false)
+
+    handleA.destroy()
+    handleB.destroy()
+    await flushReact()
   })
 })
 
