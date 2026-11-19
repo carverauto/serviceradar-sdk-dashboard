@@ -1,6 +1,6 @@
 {
   "name": "@carverauto/serviceradar-dashboard-sdk",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "ServiceRadar dashboard package SDK for browser module and WASM renderers.",
   "type": "module",
   "license": "UNLICENSED",
@@ -23,6 +23,10 @@
     "./react": {
       "types": "./src/react.d.ts",
       "default": "./src/react.js"
+    },
+    "./blueprint": {
+      "types": "./src/blueprint.d.ts",
+      "default": "./src/blueprint.js"
     },
     "./srql": {
       "types": "./src/srql.d.ts",
@@ -66,19 +70,38 @@
     "srdashboard"
   ],
   "scripts": {
-    "ci": "npm test && npm run pack:check",
+    "blueprint:check": "node scripts/generate-blueprint-css.mjs --check",
+    "ci": "npm run blueprint:check && npm test && npm run pack:check",
     "pack:check": "npm pack --dry-run",
     "test": "npm run test:js && go test ./...",
     "test:js": "node --test tests/*.test.mjs"
   },
   "peerDependencies": {
     "react": ">=19.2.5",
-    "react-dom": ">=19.2.5"
+    "react-dom": ">=19.2.5",
+    "@blueprintjs/core": "^6.16.0",
+    "@blueprintjs/icons": "^6.16.0",
+    "@blueprintjs/select": "^6.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@blueprintjs/core": {
+      "optional": true
+    },
+    "@blueprintjs/icons": {
+      "optional": true
+    },
+    "@blueprintjs/select": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@carverauto/serviceradar-cli": "^0.1.4"
   },
   "devDependencies": {
+    "@blueprintjs/core": "^6.23.0",
+    "@blueprintjs/icons": "^6.16.0",
+    "@blueprintjs/select": "^6.4.2",
+    "happy-dom": "^21.0.4",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"
   }

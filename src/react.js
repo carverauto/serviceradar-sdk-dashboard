@@ -465,23 +465,74 @@ export function useDashboardController(createController, options = {}) {
 
 export function mountReactDashboard(Component, options = {}) {
   return async function mountDashboard(root, host, api) {
-    const reactRoot = createRoot(root)
+    const waitForReady = Boolean(options.waitForReady)
+    const signal = options.signal
+    if (signal?.aborted) {
+      return {destroy() {}}
+    }
+
     let mountedDashboard = null
-    let readyResolved = false
-    let resolveReady
-    const ready = new Promise((resolve) => {
-      resolveReady = resolve
-    })
+    let readySettled = false
+    let resolveReady = null
+    let rejectReady = null
+    const ready = waitForReady
+      ? new Promise((resolve, reject) => {
+        resolveReady = resolve
+        rejectReady = reject
+      })
+      : null
+
+    let reactRoot = null
+    let destroyed = false
+    function cleanupMount() {
+      if (destroyed) return
+      destroyed = true
+      try {
+        destroyMounted(mountedDashboard)
+      } finally {
+        mountedDashboard = null
+        reactRoot?.unmount?.()
+      }
+    }
+
+    const onAbort = () => {
+      if (!readySettled) {
+        readySettled = true
+        resolveReady?.()
+      }
+      cleanupMount()
+    }
+    signal?.addEventListener?.("abort", onAbort, {once: true})
+
+    const rootOptions = waitForReady
+      ? {
+        onUncaughtError(error) {
+          if (!readySettled) {
+            readySettled = true
+            rejectReady(error)
+            return
+          }
+          if (typeof reportError === "function") {
+            reportError(error)
+          } else {
+            console.error(error)
+          }
+        },
+      }
+      : undefined
+
+    reactRoot = createRoot(root, rootOptions)
+
     const lifecycle = {
       ready(mounted) {
-        if (readyResolved) {
+        if (readySettled) {
           if (mounted && mounted !== mountedDashboard) destroyMounted(mounted)
           return
         }
 
-        readyResolved = true
+        readySettled = true
         mountedDashboard = mounted || null
-        resolveReady()
+        resolveReady?.()
       },
     }
 
@@ -493,14 +544,23 @@ export function mountReactDashboard(Component, options = {}) {
       ),
     )
 
-    if (options.waitForReady) await ready
+    if (waitForReady) {
+      try {
+        await ready
+      } catch (error) {
+        cleanupMount()
+        throw error
+      } finally {
+        signal?.removeEventListener?.("abort", onAbort)
+      }
+    } else if (signal?.aborted) {
+      cleanupMount()
+    } else {
+      signal?.removeEventListener?.("abort", onAbort)
+    }
 
     return {
-      destroy() {
-        destroyMounted(mountedDashboard)
-        mountedDashboard = null
-        reactRoot.unmount()
-      },
+      destroy: cleanupMount,
     }
   }
 }
@@ -509,6 +569,10 @@ function useDashboardContext() {
   const context = useContext(DashboardContext)
   if (!context) throw new Error("ServiceRadar dashboard hooks must be used inside DashboardProvider")
   return context
+}
+
+export function useOptionalDashboardContext() {
+  return useContext(DashboardContext)
 }
 
 function safeFrames(api) {
