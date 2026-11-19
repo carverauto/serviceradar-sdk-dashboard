@@ -1159,7 +1159,9 @@ enabled.
 ## npm Release
 
 The package is published as `@carverauto/serviceradar-dashboard-sdk`. Pull requests and
-pushes run `npm run ci`, which executes JavaScript tests, Go tests, and
+pushes run `npm run ci`, which checks that the generated
+`src/blueprint-styles.js` matches the installed Blueprint CSS
+(`npm run blueprint:check`), then executes JavaScript tests, Go tests, and
 `npm pack --dry-run`.
 
 Release publishing is handled by GitHub Actions via

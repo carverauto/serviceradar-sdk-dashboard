@@ -70,7 +70,8 @@
     "srdashboard"
   ],
   "scripts": {
-    "ci": "npm test && npm run pack:check",
+    "blueprint:check": "node scripts/generate-blueprint-css.mjs --check",
+    "ci": "npm run blueprint:check && npm test && npm run pack:check",
     "pack:check": "npm pack --dry-run",
     "test": "npm run test:js && go test ./...",
     "test:js": "node --test tests/*.test.mjs"
