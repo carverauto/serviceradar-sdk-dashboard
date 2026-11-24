@@ -1,5 +1,6 @@
 export * from "./srql.js"
 export * from "./frames.js"
 export * from "./query-state.js"
+export * from "./navigation.js"
 export * from "./filtering.js"
 export * from "./arrow.js"

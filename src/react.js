@@ -2,6 +2,7 @@ import React, {createContext, useCallback, useContext, useEffect, useMemo, useRe
 import {createRoot} from "react-dom/client"
 import {createSrqlClient} from "./srql.js"
 import {createDashboardQueryState} from "./query-state.js"
+import {createDashboardNavigation} from "./navigation.js"
 import {frameDigest, frameRows, isArrowFrame} from "./frames.js"
 import {decodeArrowFrame} from "./arrow.js"
 import {createIndexedRows, indexedRowDigest} from "./filtering.js"
@@ -314,10 +315,50 @@ export function useDashboardCapability(capability) {
   return typeof api?.capabilityAllowed === "function" ? api.capabilityAllowed(capability) : false
 }
 
-export function useDashboardNavigation() {
-  const {api} = useDashboardContext()
+export function useDashboardNavigation(options) {
+  const context = useOptionalDashboardContext()
+  const hasHashOptions = options !== undefined
+  if (!hasHashOptions && !context) {
+    throw new Error("ServiceRadar dashboard hooks must be used inside DashboardProvider")
+  }
+  const api = context?.api
 
-  return useMemo(() => ({
+  const optionsRef = useRef(options)
+  optionsRef.current = options
+
+  const controllerRef = useRef(null)
+  if (hasHashOptions && controllerRef.current === null) {
+    controllerRef.current = createDashboardNavigation(options)
+  }
+
+  const [state, setState] = useState(() => (hasHashOptions ? controllerRef.current.getState() : null))
+
+  useEffect(() => {
+    if (!hasHashOptions) return undefined
+    if (controllerRef.current === null) {
+      controllerRef.current = createDashboardNavigation(optionsRef.current)
+    }
+    const controller = controllerRef.current
+    setState(controller.getState())
+    const unsubscribe = controller.subscribe((next) => setState(next))
+    return () => {
+      unsubscribe()
+      controller.destroy()
+      controllerRef.current = null
+    }
+  }, [hasHashOptions])
+
+  const navigate = useCallback((patchOrFn, opts) => {
+    controllerRef.current?.navigate(patchOrFn, opts)
+  }, [])
+  const back = useCallback(() => {
+    controllerRef.current?.back()
+  }, [])
+  const forward = useCallback(() => {
+    controllerRef.current?.forward()
+  }, [])
+
+  const hostNav = useMemo(() => ({
     open(target) {
       if (typeof api?.navigate === "function") {
         api.navigate(target)
@@ -346,6 +387,17 @@ export function useDashboardNavigation() {
       }
     },
   }), [api])
+
+  return useMemo(() => {
+    if (!hasHashOptions) return hostNav
+    return {
+      ...hostNav,
+      state,
+      navigate,
+      back,
+      forward,
+    }
+  }, [hasHashOptions, hostNav, state, navigate, back, forward])
 }
 
 export function useDashboardPreferences() {
