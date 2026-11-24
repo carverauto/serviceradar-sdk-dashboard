@@ -7,6 +7,11 @@ import type {
   DashboardQueryStateResetOptions,
   DashboardQueryStateSnapshot,
 } from "./query-state.js"
+import type {
+  CreateDashboardNavigationOptions,
+  DashboardNavigationOptions,
+  DashboardNavigationPatch,
+} from "./navigation.js"
 import type {IndexedRows, IndexedRowsOptions} from "./filtering.js"
 
 export type DashboardTheme = "dark" | "light" | string
@@ -290,11 +295,24 @@ export function useDashboardSettings(): Record<string, unknown>
 export function useDashboardMapbox(): Record<string, unknown>
 export function useDashboardLibraries(): DashboardLibraries
 export function useDashboardCapability(capability: string): boolean
-export function useDashboardNavigation(): {
+export interface DashboardHostNavigation {
   open(target: DashboardNavigationTarget): void
   toDevice(deviceUid: string): void
   toDashboard(routeSlug: string): void
 }
+
+export interface UseDashboardNavigationResult<State extends Record<string, string> = Record<string, string>>
+  extends DashboardHostNavigation {
+  state: Readonly<State>
+  navigate(patch: DashboardNavigationPatch<State>, options?: DashboardNavigationOptions): void
+  back(): void
+  forward(): void
+}
+
+export function useDashboardNavigation(): DashboardHostNavigation
+export function useDashboardNavigation<State extends Record<string, string> = Record<string, string>>(
+  options: CreateDashboardNavigationOptions<State>,
+): UseDashboardNavigationResult<State>
 export function useDashboardPreferences(): DashboardPreferenceApi
 export function useDashboardSavedQueries(): DashboardSavedQueryApi
 export function useDashboardPopup(): DashboardPopupApi

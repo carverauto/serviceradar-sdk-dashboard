@@ -355,6 +355,51 @@ actually changes. The framework-agnostic core is exposed as
 `createDashboardQueryState` at `@carverauto/serviceradar-dashboard-sdk/query-state` for
 non-React consumers.
 
+### Hash navigation & browser history — `useDashboardNavigation`, `createDashboardNavigation`
+
+Custom dashboards hosted inside ServiceRadar's Phoenix LiveView shell need
+working Browser Back/Forward and shareable deep-links without clobbering
+LiveView's internal `window.history.state` (`{type, id, position, scroll}`).
+Pass navigation options to `useDashboardNavigation` for hash-backed view state
+that preserves `window.history.state`, deduplicates `popstate`/`hashchange`
+events, and falls back to `location.hash` in sandboxed iframes:
+
+```jsx
+import {useDashboardNavigation} from "@carverauto/serviceradar-dashboard-sdk/react"
+
+function HorizonDashboard() {
+  const {state, navigate, back, forward} = useDashboardNavigation({
+    defaults: {tab: "overview", target: "", q: ""},
+    validValues: {tab: ["overview", "probes", "targets"]},
+  })
+
+  return (
+    <>
+      <button onClick={() => navigate({tab: "probes", target: "core-rtr-1"})}>
+        Inspect core-rtr-1
+      </button>
+      <input
+        value={state.q}
+        onChange={(event) => navigate({q: event.target.value}, {replace: true})}
+      />
+      <button onClick={back}>Back</button>
+      <button onClick={forward}>Forward</button>
+    </>
+  )
+}
+```
+
+- `navigate(patchOrFn)` pushes a new history entry by default (`replace: false`),
+  so tab and drill-down transitions work with Browser Back/Forward. Pass
+  `{replace: true}` for live search or filter inputs that shouldn't flood the
+  history stack.
+- Calling `useDashboardNavigation()` with no arguments continues to return the
+  host navigation helpers (`{open, toDevice, toDashboard}`); calling it with
+  options returns `{state, navigate, back, forward, open, toDevice, toDashboard}`.
+- The framework-agnostic controller is exported as `createDashboardNavigation`
+  (alongside `parseNavigationHash` and `formatNavigationHash`) from
+  `@carverauto/serviceradar-dashboard-sdk/navigation` and the root package entry.
+
 ### Frame data — `useFrameRows`, `useArrowTable`, `useDashboardFrame`
 
 `useDashboardFrame` and `useDashboardFrames` now bail out when the incoming

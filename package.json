@@ -36,6 +36,10 @@
       "types": "./src/query-state.d.ts",
       "default": "./src/query-state.js"
     },
+    "./navigation": {
+      "types": "./src/navigation.d.ts",
+      "default": "./src/navigation.js"
+    },
     "./filtering": {
       "types": "./src/filtering.d.ts",
       "default": "./src/filtering.js"
